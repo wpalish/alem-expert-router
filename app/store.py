@@ -24,7 +24,8 @@ class Store:
         return expert
 
     def experts(self) -> list[Expert]:
-        return list(self._experts.values())
+        with self._lock:
+            return list(self._experts.values())
 
     # --- заявки ---
     def add_request(self, request: Request) -> Request:
@@ -33,7 +34,8 @@ class Store:
         return request
 
     def requests(self) -> list[Request]:
-        return list(self._requests.values())
+        with self._lock:
+            return list(self._requests.values())
 
     def reset(self) -> None:
         with self._lock:

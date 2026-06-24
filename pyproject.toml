@@ -1,0 +1,9 @@
+[project]
+name = "alem-expert-router"
+version = "0.2.0"
+description = "Умное распределение экспертов, менторов и фрилансеров по заявкам"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

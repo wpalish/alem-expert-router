@@ -140,46 +140,45 @@
 
 <script>
 const $ = (s) => document.querySelector(s);
+// экранирование строк из API (защита от XSS)
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 async function loadDashboard() {
-  const [dash, assignRes] = await Promise.all([
-    fetch("/dashboard").then(r => r.json()),
-    fetch("/assign", { method: "POST" }).then(r => r.json()),
-  ]);
+  const d = await fetch("/dashboard").then((r) => r.json());
 
-  $("#matched").textContent = dash.matched;
-  $("#total").textContent = dash.total;
-  $("#rate").textContent = dash.total ? Math.round(dash.matched / dash.total * 100) + "%" : "—";
+  $("#matched").textContent = d.matched;
+  $("#total").textContent = d.total;
+  $("#rate").textContent = d.total ? Math.round((d.matched / d.total) * 100) + "%" : "—";
 
   // загрузка исполнителей
-  $("#mentors").innerHTML = dash.experts.map(e => `
+  $("#mentors").innerHTML = d.experts.map((e) => `
     <div class="mentor">
-      <div class="row"><span>${e.name} <span class="role">· ${e.role}</span></span>
+      <div class="row"><span>${esc(e.name)} <span class="role">· ${esc(e.role)}</span></span>
         <span>${e.assigned_now}/${e.capacity}</span></div>
       <div class="bar"><i data-w="${Math.min(e.utilization, 1)}"></i></div>
     </div>`).join("");
   requestAnimationFrame(() => document.querySelectorAll(".bar > i")
-    .forEach(i => i.style.transform = `scaleX(${i.dataset.w})`));
+    .forEach((i) => i.style.transform = `scaleX(${i.dataset.w})`));
 
-  // назначения
-  const items = assignRes.assignments.map(a => {
-    const hi = a.reasons.find(r => r.includes("приоритет"));
+  // назначения с объяснением
+  const items = d.assignments.map((a) => {
+    const hi = a.reasons.some((r) => r.includes("приоритет"));
     return `<article class="item">
       <div class="score">${Math.round(a.score)}</div>
       <div>
-        <h3>${a.request_title} ${hi ? '<span class="pill hi">приоритет</span>' : ''}</h3>
-        <div class="who">→ <b>${a.expert_name}</b></div>
-        <ul class="reasons">${a.reasons.map(r => `<li>${r}</li>`).join("")}</ul>
+        <h3>${esc(a.request_title)} ${hi ? '<span class="pill hi">приоритет</span>' : ""}</h3>
+        <div class="who">→ <b>${esc(a.expert_name)}</b></div>
+        <ul class="reasons">${a.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>
       </div>
     </article>`;
   }).join("");
   $("#assignments").innerHTML = items || '<p class="empty">Нет назначений.</p>';
 
   // неназначенные
-  const u = assignRes.unassigned;
-  $("#unassignedCard").hidden = u.length === 0;
-  $("#unassigned").innerHTML = u.map(x =>
-    `<div class="u"><span class="x">✗</span><span>${x.request_title} — <em>${x.reason}</em></span></div>`
+  $("#unassignedCard").hidden = d.unassigned.length === 0;
+  $("#unassigned").innerHTML = d.unassigned.map((x) =>
+    `<div class="u"><span class="x">✗</span><span>${esc(x.request_title)} — <em>${esc(x.reason)}</em></span></div>`
   ).join("");
 }
 
@@ -189,8 +188,8 @@ $("#seed").addEventListener("click", async () => {
 });
 $("#run").addEventListener("click", loadDashboard);
 
-// автозагрузка демо при первом открытии
-(async () => { await fetch("/seed", { method: "POST" }); await loadDashboard(); })();
+// данные засеяны при старте сервера — просто грузим дашборд
+loadDashboard();
 </script>
 </body>
 </html>

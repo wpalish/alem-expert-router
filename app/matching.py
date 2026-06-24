@@ -168,11 +168,14 @@ def assign_all(
 
 def _explain_no_match(request: Request, pool: dict[str, Expert]) -> str:
     """Человеко-понятная причина, почему заявка осталась без исполнителя."""
-    has_skill = any(
-        all(e.skills.get(s, 0) >= lvl for s, lvl in request.required_skills.items())
+    skilled = [
+        e
         for e in pool.values()
-    )
-    if not has_skill:
+        if all(e.skills.get(s, 0) >= lvl for s, lvl in request.required_skills.items())
+    ]
+    if not skilled:
         need = ", ".join(f"{s}≥{lvl}" for s, lvl in request.required_skills.items())
         return f"Нет исполнителя с компетенциями: {need}"
+    if not any(e.available for e in skilled):
+        return "Все подходящие исполнители помечены как недоступны"
     return "Все подходящие исполнители заняты (нет свободной ёмкости)"
