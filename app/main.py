@@ -5,7 +5,10 @@
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 
 from . import seed
 from .matching import Weights, assign_all
@@ -19,6 +22,13 @@ app = FastAPI(
     version="0.1.0",
 )
 store = Store()
+_STATIC = Path(__file__).parent / "static"
+
+
+@app.get("/", include_in_schema=False)
+def dashboard_page() -> FileResponse:
+    """Веб-панель распределения (демо-экран для созвона)."""
+    return FileResponse(_STATIC / "index.html")
 
 
 @app.get("/health")
