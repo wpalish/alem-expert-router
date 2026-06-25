@@ -1,8 +1,7 @@
 """REST API системы умного распределения экспертов (FastAPI).
 
 Запуск:  uvicorn app.main:app --reload
-Документация:  http://localhost:8000/docs
-Дашборд:  http://localhost:8000/
+Дашборд:  http://localhost:8000/   ·   Документация:  /docs
 """
 from __future__ import annotations
 
@@ -15,7 +14,8 @@ from fastapi import Request as HttpRequest
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from . import seed
+from . import ai, seed
+from .db import Database
 from .matching import Weights, assign_all
 from .models import (
     AssignmentResult,
@@ -23,41 +23,44 @@ from .models import (
     Expert,
     ExpertCreate,
     ExpertLoad,
+    ParseInput,
+    ParseResult,
     Request,
     RequestCreate,
 )
-from .store import Store
 
-store = Store()
+db = Database()
 _STATIC = Path(__file__).parent / "static"
 
 
 def _seed_store() -> None:
-    store.reset()
+    db.reset()
     for expert in seed.EXPERTS:
-        store.add_expert(expert)
+        db.upsert_expert(expert)
     for request in seed.REQUESTS:
-        store.add_request(request)
+        db.upsert_request(request)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    _seed_store()  # данные доступны сразу после старта (демо «из коробки»)
+    if db.count() == (0, 0):  # первый запуск — наполнить демо-данными
+        _seed_store()
     yield
 
 
 app = FastAPI(
     title="Alem Expert Router",
     description="Умное распределение экспертов, менторов и фрилансеров "
-    "по входящим заявкам — с учётом компетенций, загрузки и приоритетов.",
-    version="0.2.0",
+    "по входящим заявкам — с учётом компетенций, загрузки и приоритетов. "
+    "AI-слой извлекает компетенции из свободного текста заявки.",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:8000").split(","),
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type"],
 )
 
@@ -65,7 +68,6 @@ _LOCAL_HOSTS = {"127.0.0.1", "::1", "testclient", "localhost"}
 
 
 def local_only(request: HttpRequest) -> None:
-    """Разрешить write-операции (seed/reset) только с локального хоста."""
     host = request.client.host if request.client else None
     if host not in _LOCAL_HOSTS:
         raise HTTPException(status_code=403, detail="Доступно только локально")
@@ -85,29 +87,48 @@ def health() -> dict[str, str]:
 
 
 # --------------------------------------------------------------------------- #
-#  Эксперты
+#  Эксперты (CRUD)
 # --------------------------------------------------------------------------- #
 @app.post("/experts", response_model=Expert, tags=["Experts"])
-def add_expert(payload: ExpertCreate) -> Expert:
-    return store.add_expert(Expert(**payload.model_dump()))
+def save_expert(payload: ExpertCreate) -> Expert:
+    """Создать или обновить исполнителя (по id)."""
+    return db.upsert_expert(Expert(**payload.model_dump()))
 
 
 @app.get("/experts", response_model=list[Expert], tags=["Experts"])
 def list_experts() -> list[Expert]:
-    return store.experts()
+    return db.experts()
+
+
+@app.delete("/experts/{expert_id}", tags=["Experts"])
+def remove_expert(expert_id: str) -> dict[str, bool]:
+    return {"deleted": db.delete_expert(expert_id)}
 
 
 # --------------------------------------------------------------------------- #
-#  Заявки
+#  Заявки (CRUD + AI)
 # --------------------------------------------------------------------------- #
 @app.post("/requests", response_model=Request, tags=["Requests"])
-def add_request(payload: RequestCreate) -> Request:
-    return store.add_request(Request(**payload.model_dump()))
+def save_request(payload: RequestCreate) -> Request:
+    """Создать или обновить заявку (по id)."""
+    return db.upsert_request(Request(**payload.model_dump()))
 
 
 @app.get("/requests", response_model=list[Request], tags=["Requests"])
 def list_requests() -> list[Request]:
-    return store.requests()
+    return db.requests()
+
+
+@app.delete("/requests/{request_id}", tags=["Requests"])
+def remove_request(request_id: str) -> dict[str, bool]:
+    return {"deleted": db.delete_request(request_id)}
+
+
+@app.post("/requests/parse", response_model=ParseResult, tags=["Requests"])
+def parse_request(payload: ParseInput) -> ParseResult:
+    """AI: извлечь требуемые компетенции из свободного текста заявки."""
+    skills, method = ai.extract_skills(payload.text)
+    return ParseResult(skills=skills, method=method)
 
 
 # --------------------------------------------------------------------------- #
@@ -115,15 +136,14 @@ def list_requests() -> list[Request]:
 # --------------------------------------------------------------------------- #
 @app.get("/assign", response_model=AssignmentResult, tags=["Matching"])
 def assign() -> AssignmentResult:
-    """Умное распределение по текущему пулу заявок и исполнителей."""
-    return assign_all(store.requests(), store.experts(), Weights())
+    return assign_all(db.requests(), db.experts(), Weights())
 
 
 @app.get("/dashboard", response_model=DashboardResponse, tags=["Matching"])
 def dashboard() -> DashboardResponse:
     """Единый прозрачный срез: назначения + загрузка каждого исполнителя."""
-    snapshot = store.experts()  # один снимок — без гонок с seed/reset
-    result = assign_all(store.requests(), snapshot, Weights())
+    snapshot = db.experts()
+    result = assign_all(db.requests(), snapshot, Weights())
 
     load: dict[str, int] = {e.id: 0 for e in snapshot}
     for a in result.assignments:
@@ -131,20 +151,15 @@ def dashboard() -> DashboardResponse:
 
     experts = [
         ExpertLoad(
-            id=e.id,
-            name=e.name,
-            role=e.role,
-            assigned_now=load.get(e.id, 0),
-            capacity=e.capacity,
+            id=e.id, name=e.name, role=e.role,
+            assigned_now=load.get(e.id, 0), capacity=e.capacity,
             utilization=round(load.get(e.id, 0) / e.capacity, 2),
         )
         for e in snapshot
     ]
     return DashboardResponse(
-        matched=result.matched,
-        total=result.total,
-        assignments=result.assignments,
-        unassigned=result.unassigned,
+        matched=result.matched, total=result.total,
+        assignments=result.assignments, unassigned=result.unassigned,
         experts=experts,
     )
 
@@ -154,12 +169,11 @@ def dashboard() -> DashboardResponse:
 # --------------------------------------------------------------------------- #
 @app.post("/seed", tags=["Dev"], dependencies=[Depends(local_only)])
 def load_seed() -> dict[str, int]:
-    """Загрузить демо-данные (пул и заявки в духе Alem School)."""
     _seed_store()
     return {"experts": len(seed.EXPERTS), "requests": len(seed.REQUESTS)}
 
 
 @app.post("/reset", tags=["Dev"], dependencies=[Depends(local_only)])
 def reset() -> dict[str, str]:
-    store.reset()
+    db.reset()
     return {"status": "cleared"}

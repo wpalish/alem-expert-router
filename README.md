@@ -53,17 +53,28 @@ curl -X POST localhost:8000/assign     # умное распределение
 curl localhost:8000/dashboard          # прозрачная картина загрузки
 ```
 
+## Возможности
+
+- **Веб-приложение** с вкладками: Распределение · Заявки · Эксперты (формы, CRUD, удаление).
+- **AI-слой**: заявку можно описать свободным текстом — система сама извлекает
+  компетенции (`/requests/parse`). LLM через Groq при наличии ключа, иначе —
+  детерминированный fallback по таксономии (работает без ключей).
+- **Persistence**: данные в SQLite, переживают перезапуск.
+
 ## Архитектура
 
 ```
 app/
-├── models.py     # Pydantic-модели: Expert, Request, Assignment
+├── models.py     # Pydantic-схемы: вход (*Create) ↔ домен ↔ ответы
 ├── matching.py   # ЯДРО: оценка соответствия + распределение (объяснимое)
-├── store.py      # репозиторий (in-memory; легко заменить на PostgreSQL)
-├── main.py       # FastAPI: /experts /requests /assign /dashboard
-└── seed.py       # демо-данные
+├── ai.py         # AI-слой: извлечение компетенций из текста (LLM + fallback)
+├── db.py         # SQLite-репозиторий (CRUD, переживает перезапуск)
+├── main.py       # FastAPI: CRUD /experts /requests, /requests/parse, /assign, /dashboard
+├── seed.py       # демо-данные
+└── static/       # одностраничное веб-приложение (вкладки, формы)
 tests/
-└── test_matching.py   # 8 тестов: компетенции, загрузка, приоритеты, прозрачность
+├── test_matching.py   # 8 тестов ядра
+└── test_api.py        # 10 тестов API: CRUD, AI-парсинг, распределение
 ```
 
 ## Дорожная карта (MVP → продукт)

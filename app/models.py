@@ -126,3 +126,16 @@ class DashboardResponse(BaseModel):
     assignments: list[Assignment] = Field(default_factory=list)
     unassigned: list[Unassigned] = Field(default_factory=list)
     experts: list[ExpertLoad] = Field(default_factory=list)
+
+
+class ParseInput(BaseModel):
+    """Свободный текст заявки для AI-извлечения компетенций."""
+
+    text: str
+
+
+class ParseResult(BaseModel):
+    """Результат AI-разбора: извлечённые навыки и метод (llm/keywords)."""
+
+    skills: SkillMap = Field(default_factory=dict)
+    method: str
