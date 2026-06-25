@@ -52,6 +52,17 @@ def test_delete_expert(client: TestClient) -> None:
     assert client.get("/experts").json() == []
 
 
+def test_request_without_skills_rejected(client: TestClient) -> None:
+    r = client.post("/requests", json={"id": "r1", "title": "X",
+                                       "required_skills": {}, "priority": 3})
+    assert r.status_code == 400
+
+
+def test_expert_without_skills_rejected(client: TestClient) -> None:
+    r = client.post("/experts", json={"id": "e1", "name": "X", "skills": {}})
+    assert r.status_code == 400
+
+
 def test_seed_assign_dashboard_flow(client: TestClient) -> None:
     assert client.post("/seed").json() == {"experts": 5, "requests": 6}
     dash = client.get("/dashboard").json()

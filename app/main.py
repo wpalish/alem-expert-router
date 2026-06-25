@@ -92,6 +92,8 @@ def health() -> dict[str, str]:
 @app.post("/experts", response_model=Expert, tags=["Experts"])
 def save_expert(payload: ExpertCreate) -> Expert:
     """Создать или обновить исполнителя (по id)."""
+    if not payload.skills:
+        raise HTTPException(status_code=400, detail="Укажите хотя бы один навык исполнителя")
     return db.upsert_expert(Expert(**payload.model_dump()))
 
 
@@ -111,6 +113,8 @@ def remove_expert(expert_id: str) -> dict[str, bool]:
 @app.post("/requests", response_model=Request, tags=["Requests"])
 def save_request(payload: RequestCreate) -> Request:
     """Создать или обновить заявку (по id)."""
+    if not payload.required_skills:
+        raise HTTPException(status_code=400, detail="Укажите хотя бы одну требуемую компетенцию")
     return db.upsert_request(Request(**payload.model_dump()))
 
 

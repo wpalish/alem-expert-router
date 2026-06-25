@@ -109,6 +109,15 @@
     padding: .2rem .4rem; border-radius: 8px; }
   .del:hover { background: oklch(95% .04 25); }
   .empty { padding: 1.4rem; text-align: center; color: var(--muted); }
+  .row-card { transition: transform var(--ease) 150ms, box-shadow var(--ease) 150ms; }
+  .row-card:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+  #toast.toast { position: fixed; left: 50%; bottom: 1.5rem; transform: translate(-50%, 2rem);
+    padding: .7rem 1.2rem; border-radius: 12px; font-weight: 600; font-size: .9rem; color: #fff;
+    box-shadow: var(--shadow); opacity: 0; pointer-events: none; z-index: 50;
+    transition: opacity 280ms var(--ease), transform 280ms var(--ease); }
+  #toast.toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #toast.toast.err { background: var(--danger); }
+  #toast.toast.ok { background: var(--ok); }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -196,17 +205,30 @@ const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 const api = {
   get: (u) => fetch(u).then(r => r.json()),
-  post: (u, b) => fetch(u, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(b) }).then(r => r.json()),
+  post: async (u, b) => {
+    const r = await fetch(u, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(b) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.detail || ("ошибка " + r.status));
+    return d;
+  },
   del: (u) => fetch(u, { method:"DELETE" }).then(r => r.json()),
 };
 const parseSkills = (str) => {
   const out = {};
   (str || "").split(",").forEach(p => {
     const m = p.trim().match(/^(.+?)\s*[:=]\s*(\d)$/);
-    if (m) out[m[1].trim().toLowerCase()] = Math.max(1, Math.min(5, +m[2]));
+    if (m) { const lvl = +m[2]; if (lvl >= 1) out[m[1].trim().toLowerCase()] = Math.min(5, lvl); }
   });
   return out;
 };
+const uid = (p) => p + (crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Date.now().toString(36));
+function notify(msg, ok = false) {
+  let n = document.getElementById("toast");
+  if (!n) { n = document.createElement("div"); n.id = "toast"; document.body.appendChild(n); }
+  n.textContent = msg; n.className = "toast " + (ok ? "ok" : "err");
+  requestAnimationFrame(() => n.classList.add("show"));
+  clearTimeout(n._t); n._t = setTimeout(() => n.classList.remove("show"), 2800);
+}
 const skillStr = (sk) => Object.entries(sk).map(([k,v]) => `${k} ${v}`).join(" · ");
 
 /* ---- вкладки ---- */
@@ -255,27 +277,35 @@ async function loadRequests() {
 }
 $("#parseBtn").addEventListener("click", async () => {
   const text = $("#rText").value.trim();
-  if (!text) return;
+  if (!text) { notify("Сначала опиши задачу словами"); return; }
+  aiSkills = {};
   $("#parseBtn").textContent = "⏳ Анализирую…";
-  const res = await api.post("/requests/parse", { text });
-  aiSkills = res.skills || {};
-  $("#rChips").innerHTML = Object.entries(aiSkills).map(([k,v]) => `<span class="chip">${esc(k)} ${v}</span>`).join("")
-    || '<span class="method">навыки не распознаны — впиши вручную</span>';
-  $("#rMethod").textContent = res.method === "llm" ? "🤖 извлечено LLM" :
-    res.method === "keywords" ? "🔑 по ключевым словам" : "";
+  try {
+    const res = await api.post("/requests/parse", { text });
+    aiSkills = res.skills || {};
+    $("#rChips").innerHTML = Object.entries(aiSkills).map(([k, v]) => `<span class="chip">${esc(k)} ${v}</span>`).join("")
+      || '<span class="method">навыки не распознаны — впиши вручную</span>';
+    $("#rMethod").textContent = res.method === "llm" ? "🤖 извлечено LLM" :
+      res.method === "keywords" ? "🔑 по ключевым словам" : "";
+  } catch (err) { notify("AI недоступен: " + err.message); }
   $("#parseBtn").textContent = "🪄 Извлечь компетенции (AI)";
 });
 $("#reqForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const manual = parseSkills($("#rSkills").value);
   const skills = Object.keys(manual).length ? manual : aiSkills;
-  await api.post("/requests", {
-    id: "r" + Date.now(), title: $("#rTitle").value.trim(),
-    description: $("#rText").value.trim(), required_skills: skills,
-    priority: +$("#rPriority").value,
-  });
-  e.target.reset(); aiSkills = {}; $("#rChips").innerHTML = ""; $("#rMethod").textContent = "";
-  loadRequests();
+  if (!Object.keys(skills).length) {
+    notify("Добавь хотя бы одну компетенцию — через AI или вручную"); return;
+  }
+  try {
+    await api.post("/requests", {
+      id: uid("r"), title: $("#rTitle").value.trim(),
+      description: $("#rText").value.trim(), required_skills: skills,
+      priority: +$("#rPriority").value,
+    });
+    e.target.reset(); aiSkills = {}; $("#rChips").innerHTML = ""; $("#rMethod").textContent = "";
+    notify("Заявка добавлена", true); loadRequests();
+  } catch (err) { notify("Не удалось: " + err.message); }
 });
 
 /* ---- эксперты ---- */
@@ -293,12 +323,17 @@ async function loadExperts() {
 }
 $("#expForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  await api.post("/experts", {
-    id: "e" + Date.now(), name: $("#eName").value.trim(), role: $("#eRole").value,
-    skills: parseSkills($("#eSkills").value), capacity: +$("#eCap").value,
-    rating: +$("#eRating").value,
-  });
-  e.target.reset(); loadExperts();
+  const skills = parseSkills($("#eSkills").value);
+  if (!Object.keys(skills).length) {
+    notify("Укажи навыки в формате python:5, fastapi:4"); return;
+  }
+  try {
+    await api.post("/experts", {
+      id: uid("e"), name: $("#eName").value.trim(), role: $("#eRole").value,
+      skills, capacity: +$("#eCap").value, rating: +$("#eRating").value,
+    });
+    e.target.reset(); notify("Исполнитель добавлен", true); loadExperts();
+  } catch (err) { notify("Не удалось: " + err.message); }
 });
 
 /* ---- демо ---- */
