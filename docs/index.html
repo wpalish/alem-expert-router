@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Alem Expert Router</title>
+<style>
+  :root {
+    --bg: oklch(98% 0.005 265); --surface: oklch(100% 0 0);
+    --ink: oklch(22% 0.03 265); --muted: oklch(55% 0.02 265);
+    --line: oklch(91% 0.012 265); --accent: oklch(55% 0.18 277);
+    --accent-d: oklch(48% 0.2 277); --soft: oklch(96% 0.03 277);
+    --ok: oklch(60% 0.15 150); --ok-soft: oklch(95% 0.05 150);
+    --warn: oklch(70% 0.15 55); --warn-soft: oklch(96% 0.05 60);
+    --danger: oklch(58% 0.2 25);
+    --radius: 14px; --shadow: 0 1px 2px oklch(0% 0 0/.04), 0 10px 26px oklch(0% 0 0/.06);
+    --ease: cubic-bezier(.16,1,.3,1);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.5; }
+  h1,h2,h3 { letter-spacing: -.01em; }
+
+  header.top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center;
+    gap: 1.2rem; padding: .8rem 1.4rem; background: oklch(100% 0 0/.85);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: .6rem; margin-right: .4rem; }
+  .logo { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--accent), oklch(58% .19 300)); color: #fff;
+    font-weight: 800; }
+  .brand b { font-size: 1rem; }
+  nav.tabs { display: flex; gap: .25rem; }
+  nav.tabs button { font: inherit; font-weight: 600; border: 0; background: transparent;
+    color: var(--muted); padding: .5rem .9rem; border-radius: 9px; cursor: pointer;
+    transition: background 150ms, color 150ms; }
+  nav.tabs button:hover { background: var(--soft); color: var(--ink); }
+  nav.tabs button.on { background: var(--accent); color: #fff; }
+  .spacer { flex: 1; }
+
+  button.btn { font: inherit; font-weight: 600; cursor: pointer; border-radius: 10px;
+    padding: .55rem 1rem; border: 1px solid var(--line); background: var(--surface);
+    color: var(--ink); transition: transform var(--ease) 150ms, box-shadow 150ms, background 150ms; }
+  button.btn:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+  button.btn.primary { background: var(--accent); color: #fff; border-color: transparent; }
+  button.btn.ai { background: var(--soft); color: var(--accent-d); border-color: transparent; }
+  button.btn.sm { padding: .35rem .7rem; font-size: .82rem; border-radius: 8px; }
+
+  main { max-width: 1140px; margin: 0 auto; padding: 1.4rem; }
+  .card { background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow); }
+  .card h2 { font-size: .78rem; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); margin: 0; padding: 1rem 1.1rem .3rem; }
+
+  /* --- распределение --- */
+  .grid { display: grid; grid-template-columns: 320px 1fr; gap: 1.4rem; align-items: start; }
+  @media (max-width: 860px){ .grid{ grid-template-columns: 1fr; } }
+  .stats { display: flex; gap: .8rem; padding: .5rem 1.1rem 1.1rem; }
+  .stat b { display: block; font-size: 1.9rem; line-height: 1.1; }
+  .stat span { font-size: .76rem; color: var(--muted); }
+  .mentor { padding: .45rem 1.1rem; }
+  .mentor:last-child { padding-bottom: 1rem; }
+  .mentor .row { display: flex; justify-content: space-between; font-size: .9rem; margin-bottom: .28rem; }
+  .mentor .role { font-size: .72rem; color: var(--muted); }
+  .bar { height: 8px; background: var(--soft); border-radius: 99px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 99px;
+    transform-origin: left; transform: scaleX(0); transition: transform 700ms var(--ease); }
+  .assign { padding: .3rem .6rem 1rem; }
+  .item { display: grid; grid-template-columns: auto 1fr; gap: .9rem; padding: .85rem .6rem;
+    border-bottom: 1px solid var(--line); }
+  .item:last-child { border-bottom: 0; }
+  .score { width: 50px; height: 50px; border-radius: 12px; display: grid; place-items: center;
+    background: var(--soft); color: var(--accent-d); font-weight: 800; }
+  .item h3 { margin: 0 0 .12rem; font-size: 1rem; }
+  .who { font-size: .85rem; color: var(--muted); margin-bottom: .4rem; }
+  .who b { color: var(--ink); }
+  .reasons { list-style: none; margin: 0; padding: 0; display: grid; gap: .18rem; }
+  .reasons li { font-size: .82rem; color: var(--muted); padding-left: 1.1rem; position: relative; }
+  .reasons li::before { content: "✓"; position: absolute; left: 0; color: var(--ok); font-weight: 700; }
+  .pill { font-size: .68rem; font-weight: 700; padding: .12rem .5rem; border-radius: 99px; }
+  .pill.hi { background: var(--warn-soft); color: var(--warn); }
+  .unassigned { padding: .3rem 1.1rem 1.1rem; }
+  .u { display: flex; gap: .5rem; font-size: .85rem; padding: .35rem 0; border-bottom: 1px dashed var(--line); }
+  .u:last-child { border-bottom: 0; } .u .x { color: var(--warn); font-weight: 800; }
+  .u em { color: var(--muted); font-style: normal; }
+
+  /* --- списки/формы --- */
+  .split { display: grid; grid-template-columns: 380px 1fr; gap: 1.4rem; align-items: start; }
+  @media (max-width: 860px){ .split{ grid-template-columns: 1fr; } }
+  form { padding: .4rem 1.1rem 1.1rem; display: grid; gap: .7rem; }
+  label { font-size: .8rem; font-weight: 600; color: var(--muted); display: grid; gap: .3rem; }
+  input, select, textarea { font: inherit; padding: .55rem .7rem; border: 1px solid var(--line);
+    border-radius: 10px; background: var(--surface); color: var(--ink); width: 100%; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--soft); border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 64px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
+  .chips { display: flex; flex-wrap: wrap; gap: .35rem; min-height: 1.4rem; }
+  .chip { font-size: .78rem; font-weight: 600; padding: .2rem .55rem; border-radius: 99px;
+    background: var(--soft); color: var(--accent-d); }
+  .method { font-size: .72rem; color: var(--muted); }
+  .list { display: grid; gap: .7rem; }
+  .row-card { display: flex; align-items: center; gap: .9rem; padding: .85rem 1rem;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  .row-card .av { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center;
+    background: var(--soft); color: var(--accent-d); font-weight: 800; flex: none; }
+  .row-card .meta { flex: 1; min-width: 0; }
+  .row-card .meta b { font-size: .98rem; }
+  .row-card .meta .sub { font-size: .8rem; color: var(--muted); }
+  .del { color: var(--danger); background: transparent; border: 0; cursor: pointer; font-size: 1.1rem;
+    padding: .2rem .4rem; border-radius: 8px; }
+  .del:hover { background: oklch(95% .04 25); }
+  .empty { padding: 1.4rem; text-align: center; color: var(--muted); }
+  .row-card { transition: transform var(--ease) 150ms, box-shadow var(--ease) 150ms; }
+  .row-card:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+  #toast.toast { position: fixed; left: 50%; bottom: 1.5rem; transform: translate(-50%, 2rem);
+    padding: .7rem 1.2rem; border-radius: 12px; font-weight: 600; font-size: .9rem; color: #fff;
+    box-shadow: var(--shadow); opacity: 0; pointer-events: none; z-index: 50;
+    transition: opacity 280ms var(--ease), transform 280ms var(--ease); }
+  #toast.toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #toast.toast.err { background: var(--danger); }
+  #toast.toast.ok { background: var(--ok); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><div class="logo">A</div><b>Alem Expert Router</b></div>
+    <nav class="tabs">
+      <button data-tab="assign" class="on">Распределение</button>
+      <button data-tab="requests">Заявки</button>
+      <button data-tab="experts">Эксперты</button>
+    </nav>
+    <div class="spacer"></div>
+    <button class="btn sm" id="seedBtn">Демо-данные</button>
+  </header>
+
+  <main>
+    <!-- ===== РАСПРЕДЕЛЕНИЕ ===== -->
+    <section id="view-assign" class="grid">
+      <aside style="display:grid; gap:1.4rem;">
+        <section class="card"><h2>Сводка</h2>
+          <div class="stats">
+            <div class="stat"><b id="matched">—</b><span>назначено</span></div>
+            <div class="stat"><b id="total">—</b><span>заявок</span></div>
+            <div class="stat"><b id="rate">—</b><span>покрытие</span></div>
+          </div>
+        </section>
+        <section class="card"><h2>Загрузка исполнителей</h2><div id="mentors"></div></section>
+        <section class="card hidden" id="unassignedCard"><h2>Без исполнителя</h2>
+          <div class="unassigned" id="unassigned"></div></section>
+      </aside>
+      <section class="card"><h2>Назначения с объяснением</h2>
+        <div class="assign" id="assignments"></div></section>
+    </section>
+
+    <!-- ===== ЗАЯВКИ ===== -->
+    <section id="view-requests" class="split hidden">
+      <section class="card"><h2>Новая заявка</h2>
+        <form id="reqForm">
+          <label>Название
+            <input id="rTitle" required placeholder="Чат-бот поддержки студентов" /></label>
+          <label>Опиши задачу словами — AI извлечёт компетенции
+            <textarea id="rText" placeholder="Нужен ассистент по базе знаний на Python с элементами ML…"></textarea></label>
+          <button type="button" class="btn ai" id="parseBtn">🪄 Извлечь компетенции (AI)</button>
+          <div>
+            <div class="chips" id="rChips"></div>
+            <div class="method" id="rMethod"></div>
+          </div>
+          <label>Навыки вручную (напр. python:4, ml:3)
+            <input id="rSkills" placeholder="python:4, ml:3" /></label>
+          <label>Приоритет
+            <select id="rPriority">
+              <option value="5">5 — наивысший</option><option value="4">4 — высокий</option>
+              <option value="3" selected>3 — средний</option><option value="2">2 — низкий</option>
+              <option value="1">1 — минимальный</option>
+            </select></label>
+          <button class="btn primary" type="submit">Добавить заявку</button>
+        </form>
+      </section>
+      <section class="card"><h2>Заявки</h2><div class="list" id="reqList" style="padding:.4rem 1.1rem 1.1rem"></div></section>
+    </section>
+
+    <!-- ===== ЭКСПЕРТЫ ===== -->
+    <section id="view-experts" class="split hidden">
+      <section class="card"><h2>Новый исполнитель</h2>
+        <form id="expForm">
+          <label>Имя <input id="eName" required placeholder="Айгерим" /></label>
+          <label>Роль
+            <select id="eRole"><option value="expert">эксперт</option>
+              <option value="mentor">ментор</option><option value="freelancer">фрилансер</option></select></label>
+          <div class="two">
+            <label>Ёмкость <input id="eCap" type="number" min="1" value="3" /></label>
+            <label>Рейтинг <input id="eRating" type="number" min="0" max="5" step="0.1" value="4.5" /></label>
+          </div>
+          <label>Навыки (напр. python:5, fastapi:4)
+            <input id="eSkills" placeholder="python:5, fastapi:4" required /></label>
+          <button class="btn primary" type="submit">Добавить исполнителя</button>
+        </form>
+      </section>
+      <section class="card"><h2>Исполнители</h2><div class="list" id="expList" style="padding:.4rem 1.1rem 1.1rem"></div></section>
+    </section>
+  </main>
+<script>
+/* Клиентская версия для GitHub Pages: логика матчинга и AI-извлечения
+   перенесены в браузер (зеркало app/matching.py и app/ai.py). Данные — в
+   localStorage. Полная версия с FastAPI-бэком, БД и LLM — в репозитории. */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const uid = p => p + (crypto.randomUUID ? crypto.randomUUID().slice(0,8) : Date.now().toString(36));
+function notify(msg, ok=false){ let n=document.getElementById("toast"); if(!n){n=document.createElement("div");n.id="toast";document.body.appendChild(n);} n.textContent=msg; n.className="toast "+(ok?"ok":"err"); requestAnimationFrame(()=>n.classList.add("show")); clearTimeout(n._t); n._t=setTimeout(()=>n.classList.remove("show"),2800); }
+const parseSkills = str => { const o={}; (str||"").split(",").forEach(p=>{ const m=p.trim().match(/^(.+?)\s*[:=]\s*(\d)$/); if(m){const l=+m[2]; if(l>=1) o[m[1].trim().toLowerCase()]=Math.min(5,l);} }); return o; };
+const skillStr = sk => Object.entries(sk).map(([k,v])=>`${k} ${v}`).join(" · ");
+
+/* ---- AI: извлечение компетенций по таксономии (как app/ai.py) ---- */
+const TAXONOMY = {python:["python","питон"],fastapi:["fastapi","фастапи"],django:["django","джанго"],react:["react","реакт"],typescript:["typescript","тайпскрипт"],sql:["sql","postgres","база данных","бд","запрос"],ml:["ml","machine learning","машинн","модел","обучени"],data:["data engineer","данны","аналитик","etl","пайплайн"],nlp:["nlp","llm","чат-бот","чатбот","распознавани","текст","язык"],devops:["devops","ci/cd","деплой","kubernetes","k8s"],docker:["docker","докер","контейнер"],flutter:["flutter","флаттер"],ui:["ui","ux","интерфейс","вёрстк","верстк","frontend","фронт"]};
+function extractSkills(text){ const low=text.toLowerCase(); const lvl=/увере|эксперт|senior|глубок|сильн|advanced|продвинут/i.test(low)?4:(/базов|junior|основ|начальн|джун/i.test(low)?2:3); const o={}; for(const[s,t]of Object.entries(TAXONOMY)) if(t.some(x=>low.includes(x))) o[s]=lvl; return o; }
+
+/* ---- демо-данные + состояние (localStorage) ---- */
+const SEED={experts:[
+  {id:"e1",name:"Айгерим",role:"expert",skills:{python:5,fastapi:5,ml:4},capacity:3,current_load:0,available:true,rating:4.9},
+  {id:"e2",name:"Данияр",role:"mentor",skills:{python:4,django:5,sql:4},capacity:4,current_load:0,available:true,rating:4.6},
+  {id:"e3",name:"Жанель",role:"freelancer",skills:{react:5,typescript:5,ui:4},capacity:2,current_load:0,available:true,rating:4.7},
+  {id:"e4",name:"Тимур",role:"expert",skills:{devops:5,docker:5,python:3},capacity:3,current_load:0,available:true,rating:4.4},
+  {id:"e5",name:"Сабина",role:"mentor",skills:{ml:5,python:5,data:5},capacity:2,current_load:0,available:true,rating:5.0}],
+ requests:[
+  {id:"r1",title:"Чат-бот поддержки студентов",required_skills:{python:4,ml:3},priority:5},
+  {id:"r2",title:"Веб-портал заявок",required_skills:{react:4,typescript:4},priority:4},
+  {id:"r3",title:"Бэкенд распределения экспертов",required_skills:{python:4,fastapi:4},priority:5},
+  {id:"r4",title:"CI/CD и контейнеризация",required_skills:{devops:4,docker:4},priority:2},
+  {id:"r5",title:"Аналитика загрузки менторов",required_skills:{sql:3,data:3},priority:3},
+  {id:"r6",title:"Мобильное приложение",required_skills:{flutter:4},priority:3}]};
+const clone=o=>JSON.parse(JSON.stringify(o));
+function load(){ try{ const s=JSON.parse(localStorage.getItem("alem")); if(s&&s.experts) return s; }catch(e){} return clone(SEED); }
+let state=load();
+const save=()=>localStorage.setItem("alem",JSON.stringify(state));
+const seedData=()=>{ state=clone(SEED); save(); };
+
+/* ---- матчинг (зеркало app/matching.py) ---- */
+const W={competency:.6,load:.25,rating:.15};
+function score(e,r){ if(!e.available) return null; const free=e.capacity-e.current_load; if(free<=0) return null;
+  const det=[]; for(const[s,m]of Object.entries(r.required_skills)){ const h=e.skills[s]||0; if(h>=m) det.push(`${s} (${h}≥${m})`); else return null; }
+  const keys=Object.keys(r.required_skills); const comp=keys.length?keys.reduce((a,s)=>a+(e.skills[s]||0),0)/(keys.length*5):.5;
+  const tw=W.competency+W.load+W.rating; const sc=Math.round((W.competency*comp+W.load*(free/e.capacity)+W.rating*(e.rating/5))/tw*1000)/10;
+  return {e,score:sc,reasons:[`Покрывает требуемые навыки: ${det.join(", ")}`,`Загрузка ${e.current_load}/${e.capacity} — свободно ${free}`,`Рейтинг ${e.rating}/5`,`Роль: ${e.role}`]}; }
+function explainNo(r,pool){ const sk=pool.filter(e=>Object.entries(r.required_skills).every(([s,l])=>(e.skills[s]||0)>=l));
+  if(!sk.length) return `Нет исполнителя с компетенциями: ${Object.entries(r.required_skills).map(([s,l])=>`${s}≥${l}`).join(", ")}`;
+  if(!sk.some(e=>e.available)) return "Все подходящие исполнители помечены как недоступны";
+  return "Все подходящие исполнители заняты (нет свободной ёмкости)"; }
+function assignAll(){ const pool=clone(state.experts); const ord=clone(state.requests).sort((a,b)=>b.priority-a.priority||a.id.localeCompare(b.id)); const A=[],U=[];
+  for(const r of ord){ const c=pool.map(e=>score(e,r)).filter(Boolean);
+    if(!c.length){ U.push({request_id:r.id,request_title:r.title,reason:explainNo(r,pool)}); continue; }
+    c.sort((a,b)=>b.score-a.score||b.e.rating-a.e.rating||(b.e.capacity-b.e.current_load)-(a.e.capacity-a.e.current_load)); const best=c[0];
+    const reasons=[...best.reasons]; if(r.priority>=4) reasons.push(`Заявка высокого приоритета (${r.priority}/5) — обработана в первую очередь`);
+    A.push({request_id:r.id,request_title:r.title,expert_id:best.e.id,expert_name:best.e.name,score:best.score,reasons}); pool.find(x=>x.id===best.e.id).current_load++; }
+  return {assignments:A,unassigned:U,matched:A.length,total:state.requests.length}; }
+
+/* ---- рендер ---- */
+function dashboard(){ const r=assignAll(); const ld={}; state.experts.forEach(e=>ld[e.id]=0); r.assignments.forEach(a=>ld[a.expert_id]++);
+  $("#matched").textContent=r.matched; $("#total").textContent=r.total; $("#rate").textContent=r.total?Math.round(r.matched/r.total*100)+"%":"—";
+  $("#mentors").innerHTML=state.experts.map(e=>`<div class="mentor"><div class="row"><span>${esc(e.name)} <span class="role">· ${esc(e.role)}</span></span><span>${ld[e.id]}/${e.capacity}</span></div><div class="bar"><i data-w="${Math.min(ld[e.id]/e.capacity,1)}"></i></div></div>`).join("")||'<p class="empty">Нет исполнителей.</p>';
+  requestAnimationFrame(()=>document.querySelectorAll(".bar > i").forEach(i=>i.style.transform=`scaleX(${i.dataset.w})`));
+  $("#assignments").innerHTML=r.assignments.map(a=>`<article class="item"><div class="score">${Math.round(a.score)}</div><div><h3>${esc(a.request_title)} ${a.reasons.some(x=>x.includes("приоритет"))?'<span class="pill hi">приоритет</span>':""}</h3><div class="who">→ <b>${esc(a.expert_name)}</b></div><ul class="reasons">${a.reasons.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div></article>`).join("")||'<p class="empty">Заявок нет — добавь во вкладке «Заявки».</p>';
+  $("#unassignedCard").classList.toggle("hidden",r.unassigned.length===0);
+  $("#unassigned").innerHTML=r.unassigned.map(x=>`<div class="u"><span class="x">✗</span><span>${esc(x.request_title)} — <em>${esc(x.reason)}</em></span></div>`).join(""); }
+function reqList(){ $("#reqList").innerHTML=clone(state.requests).sort((a,b)=>b.priority-a.priority).map(r=>`<div class="row-card"><div class="av">P${r.priority}</div><div class="meta"><b>${esc(r.title)}</b><div class="sub">${esc(skillStr(r.required_skills))||"без навыков"}</div></div><button class="del" data-dr="${esc(r.id)}" title="Удалить">✕</button></div>`).join("")||'<p class="empty">Заявок нет.</p>';
+  document.querySelectorAll("[data-dr]").forEach(b=>b.onclick=()=>{ state.requests=state.requests.filter(x=>x.id!==b.dataset.dr); save(); reqList(); }); }
+function expList(){ $("#expList").innerHTML=state.experts.map(e=>`<div class="row-card"><div class="av">${esc(e.name.slice(0,1))}</div><div class="meta"><b>${esc(e.name)}</b> <span style="font-size:.78rem;color:var(--muted)">· ${esc(e.role)} · ★${e.rating}</span><div class="sub">${esc(skillStr(e.skills))} · ёмкость ${e.capacity}</div></div><button class="del" data-de="${esc(e.id)}" title="Удалить">✕</button></div>`).join("")||'<p class="empty">Нет исполнителей.</p>';
+  document.querySelectorAll("[data-de]").forEach(b=>b.onclick=()=>{ state.experts=state.experts.filter(x=>x.id!==b.dataset.de); save(); expList(); }); }
+
+/* ---- вкладки ---- */
+document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click",()=>{ document.querySelectorAll("nav.tabs button").forEach(x=>x.classList.toggle("on",x===b)); ["assign","requests","experts"].forEach(t=>$("#view-"+t).classList.toggle("hidden",t!==b.dataset.tab)); ({assign:dashboard,requests:reqList,experts:expList}[b.dataset.tab])(); }));
+
+/* ---- формы ---- */
+let aiSkills={};
+$("#parseBtn").addEventListener("click",()=>{ const t=$("#rText").value.trim(); if(!t){notify("Сначала опиши задачу словами");return;} aiSkills=extractSkills(t);
+  $("#rChips").innerHTML=Object.entries(aiSkills).map(([k,v])=>`<span class="chip">${esc(k)} ${v}</span>`).join("")||'<span class="method">навыки не распознаны — впиши вручную</span>';
+  $("#rMethod").textContent="🔑 по ключевым словам (демо без сервера)"; });
+$("#reqForm").addEventListener("submit",e=>{ e.preventDefault(); const m=parseSkills($("#rSkills").value); const sk=Object.keys(m).length?m:aiSkills;
+  if(!Object.keys(sk).length){ notify("Добавь хотя бы одну компетенцию — через AI или вручную"); return; }
+  state.requests.push({id:uid("r"),title:$("#rTitle").value.trim(),required_skills:sk,priority:+$("#rPriority").value}); save();
+  e.target.reset(); aiSkills={}; $("#rChips").innerHTML=""; $("#rMethod").textContent=""; notify("Заявка добавлена",true); reqList(); });
+$("#expForm").addEventListener("submit",e=>{ e.preventDefault(); const sk=parseSkills($("#eSkills").value);
+  if(!Object.keys(sk).length){ notify("Укажи навыки в формате python:5, fastapi:4"); return; }
+  state.experts.push({id:uid("e"),name:$("#eName").value.trim(),role:$("#eRole").value,skills:sk,capacity:+$("#eCap").value,current_load:0,available:true,rating:+$("#eRating").value}); save();
+  e.target.reset(); notify("Исполнитель добавлен",true); expList(); });
+$("#seedBtn").addEventListener("click",()=>{ seedData(); const on=document.querySelector("nav.tabs button.on").dataset.tab; ({assign:dashboard,requests:reqList,experts:expList}[on])(); notify("Демо-данные загружены",true); });
+
+/* ---- демо-баннер ---- */
+const banner=document.createElement("div");
+banner.style.cssText="background:var(--soft);color:var(--accent-d);padding:.65rem 1rem;border-radius:11px;font-size:.85rem;margin-bottom:1.3rem;font-weight:600";
+banner.innerHTML='⚡ Демо работает прямо в браузере. Полная версия с backend (FastAPI), базой данных и LLM — в <a href="https://github.com/wpalish/alem-expert-router" target="_blank" style="color:var(--accent)">репозитории на GitHub</a>.';
+document.querySelector("main").prepend(banner);
+
+dashboard();
+</script>
+</body>
+</html>
