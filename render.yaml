@@ -1,0 +1,24 @@
+# Render Blueprint — деплой бэкенда в один клик.
+# Как развернуть:
+#   1. Зайди на https://render.com → New → Blueprint.
+#   2. Подключи репозиторий github.com/wpalish/alem-expert-router.
+#   3. Render прочитает этот файл и создаст web-сервис на бесплатном плане.
+#   4. Через ~2 минуты будет живой URL вида https://alem-expert-router.onrender.com
+#      (там же /docs — интерактивный Swagger, и /  — сам дашборд).
+# Примечание: бесплатный план «засыпает» после простоя — первый запрос
+# после паузы может занять ~50 сек (cold start). БД SQLite эфемерна и
+# пересоздаётся демо-данными при старте — для показа этого достаточно.
+services:
+  - type: web
+    name: alem-expert-router
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: CORS_ORIGINS
+        value: https://wpalish.github.io,http://localhost:8000
+      # Необязательно: включает LLM-извлечение компетенций вместо ключевых слов.
+      # Добавь ключ в Render → Environment, чтобы /requests/parse шёл через Groq.
+      # - key: GROQ_API_KEY
+      #   sync: false
