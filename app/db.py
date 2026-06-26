@@ -11,7 +11,9 @@ import sqlite3
 import threading
 from pathlib import Path
 
-from .models import Expert, Request
+from datetime import datetime
+
+from .models import Announcement, Expert, Request
 
 _DEFAULT = Path(__file__).resolve().parent.parent / "alem.db"
 
@@ -25,7 +27,7 @@ class Database:
     def _conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._path)
         conn.row_factory = sqlite3.Row
-        # --- П.7 FIX: WAL для конкурентного чтения, foreign keys ---
+        # WAL — конкурентные чтения не блокируются записью; foreign_keys — на будущее
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
@@ -34,24 +36,20 @@ class Database:
         with self._lock, self._conn() as c:
             c.execute(
                 """CREATE TABLE IF NOT EXISTS experts (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    role TEXT,
-                    skills TEXT,
-                    capacity INTEGER,
-                    current_load INTEGER,
-                    available INTEGER,
-                    rating REAL)"""
+                    id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT,
+                    skills TEXT, capacity INTEGER, current_load INTEGER,
+                    available INTEGER, rating REAL)"""
             )
             c.execute(
                 """CREATE TABLE IF NOT EXISTS requests (
-                    id TEXT PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    description TEXT,
-                    required_skills TEXT,
-                    priority INTEGER,
-                    deadline TEXT,
+                    id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT,
+                    required_skills TEXT, priority INTEGER, deadline TEXT,
                     status TEXT)"""
+            )
+            c.execute(
+                """CREATE TABLE IF NOT EXISTS announcements (
+                    id TEXT PRIMARY KEY, title TEXT NOT NULL, body TEXT,
+                    type TEXT, created_at TEXT)"""
             )
 
     # ----- сериализация -----
@@ -76,30 +74,17 @@ class Database:
     # ----- эксперты -----
     def upsert_expert(self, e: Expert) -> Expert:
         with self._lock, self._conn() as c:
-            # --- П.6 FIX: явные колонки в INSERT ---
             c.execute(
-                """INSERT INTO experts (id, name, role, skills, capacity,
-                       current_load, available, rating)
-                   VALUES (:id, :name, :role, :skills, :capacity,
-                       :current_load, :available, :rating)
-                   ON CONFLICT(id) DO UPDATE SET
-                       name=excluded.name,
-                       role=excluded.role,
-                       skills=excluded.skills,
-                       capacity=excluded.capacity,
-                       current_load=excluded.current_load,
-                       available=excluded.available,
-                       rating=excluded.rating""",
-                {
-                    "id": e.id,
-                    "name": e.name,
-                    "role": e.role,
-                    "skills": json.dumps(e.skills),
-                    "capacity": e.capacity,
-                    "current_load": e.current_load,
-                    "available": int(e.available),
-                    "rating": e.rating,
-                },
+                """INSERT INTO experts
+                       (id, name, role, skills, capacity, current_load,
+                        available, rating)
+                   VALUES (:id,:name,:role,:skills,:capacity,
+                       :current_load,:available,:rating)
+                   ON CONFLICT(id) DO UPDATE SET name=:name, role=:role,
+                       skills=:skills, capacity=:capacity, current_load=:current_load,
+                       available=:available, rating=:rating""",
+                {**e.model_dump(), "skills": json.dumps(e.skills),
+                 "available": int(e.available)},
             )
         return e
 
@@ -110,35 +95,22 @@ class Database:
 
     def delete_expert(self, expert_id: str) -> bool:
         with self._lock, self._conn() as c:
-            return c.execute(
-                "DELETE FROM experts WHERE id=?", (expert_id,)
-            ).rowcount > 0
+            return c.execute("DELETE FROM experts WHERE id=?", (expert_id,)).rowcount > 0
 
     # ----- заявки -----
     def upsert_request(self, r: Request) -> Request:
         with self._lock, self._conn() as c:
-            # --- П.6 FIX: явные колонки в INSERT ---
             c.execute(
-                """INSERT INTO requests (id, title, description,
-                       required_skills, priority, deadline, status)
-                   VALUES (:id, :title, :description,
-                       :required_skills, :priority, :deadline, :status)
-                   ON CONFLICT(id) DO UPDATE SET
-                       title=excluded.title,
-                       description=excluded.description,
-                       required_skills=excluded.required_skills,
-                       priority=excluded.priority,
-                       deadline=excluded.deadline,
-                       status=excluded.status""",
-                {
-                    "id": r.id,
-                    "title": r.title,
-                    "description": r.description,
-                    "required_skills": json.dumps(r.required_skills),
-                    "priority": r.priority,
-                    "deadline": r.deadline.isoformat() if r.deadline else None,
-                    "status": r.status,
-                },
+                """INSERT INTO requests
+                       (id, title, description, required_skills, priority,
+                        deadline, status)
+                   VALUES (:id,:title,:description,
+                       :required_skills,:priority,:deadline,:status)
+                   ON CONFLICT(id) DO UPDATE SET title=:title, description=:description,
+                       required_skills=:required_skills, priority=:priority,
+                       deadline=:deadline, status=:status""",
+                {**r.model_dump(), "required_skills": json.dumps(r.required_skills),
+                 "deadline": r.deadline.isoformat() if r.deadline else None},
             )
         return r
 
@@ -149,15 +121,43 @@ class Database:
 
     def delete_request(self, request_id: str) -> bool:
         with self._lock, self._conn() as c:
+            return c.execute("DELETE FROM requests WHERE id=?", (request_id,)).rowcount > 0
+
+    # ----- объявления -----
+    @staticmethod
+    def _row_to_announcement(r: sqlite3.Row) -> Announcement:
+        return Announcement(
+            id=r["id"], title=r["title"], body=r["body"] or "",
+            type=r["type"], created_at=datetime.fromisoformat(r["created_at"]),
+        )
+
+    def upsert_announcement(self, a: Announcement) -> Announcement:
+        with self._lock, self._conn() as c:
+            c.execute(
+                """INSERT INTO announcements (id, title, body, type, created_at)
+                   VALUES (:id,:title,:body,:type,:created_at)
+                   ON CONFLICT(id) DO UPDATE SET title=:title, body=:body,
+                       type=:type, created_at=:created_at""",
+                {**a.model_dump(), "created_at": a.created_at.isoformat()},
+            )
+        return a
+
+    def announcements(self) -> list[Announcement]:
+        with self._lock, self._conn() as c:
+            return [self._row_to_announcement(r) for r in c.execute(
+                "SELECT * FROM announcements ORDER BY created_at DESC")]
+
+    def delete_announcement(self, ann_id: str) -> bool:
+        with self._lock, self._conn() as c:
             return c.execute(
-                "DELETE FROM requests WHERE id=?", (request_id,)
-            ).rowcount > 0
+                "DELETE FROM announcements WHERE id=?", (ann_id,)).rowcount > 0
 
     # ----- обслуживание -----
     def reset(self) -> None:
         with self._lock, self._conn() as c:
             c.execute("DELETE FROM experts")
             c.execute("DELETE FROM requests")
+            c.execute("DELETE FROM announcements")
 
     def count(self) -> tuple[int, int]:
         with self._lock, self._conn() as c:

@@ -18,6 +18,7 @@ def _utcnow() -> datetime:
 
 Role = Literal["expert", "mentor", "freelancer"]
 RequestStatus = Literal["new", "assigned", "unassigned"]
+AnnouncementType = Literal["expert_needed", "task_available", "event"]
 
 # уровень владения навыком 1 (базовый) .. 5 (экспертный)
 SkillLevel = Annotated[int, Field(ge=1, le=5)]
@@ -28,9 +29,12 @@ SkillMap = dict[str, SkillLevel]  # компетенция -> уровень
 #  Исполнители
 # --------------------------------------------------------------------------- #
 class ExpertCreate(BaseModel):
-    """Входная схема создания исполнителя (без служебных полей)."""
+    """Входная схема создания исполнителя (без служебных полей).
 
-    id: str
+    `id` необязателен: если не задан, сервер сгенерирует уникальный.
+    """
+
+    id: Optional[str] = None
     name: str
     role: Role = "expert"
     skills: SkillMap = Field(default_factory=dict)
@@ -59,9 +63,12 @@ class Expert(ExpertCreate):
 #  Заявки
 # --------------------------------------------------------------------------- #
 class RequestCreate(BaseModel):
-    """Входная схема создания заявки (статус выставляет система)."""
+    """Входная схема создания заявки (статус выставляет система).
 
-    id: str
+    `id` необязателен: если не задан, сервер сгенерирует уникальный.
+    """
+
+    id: Optional[str] = None
     title: str
     description: str = ""
     required_skills: SkillMap = Field(default_factory=dict)
@@ -88,6 +95,8 @@ class Assignment(BaseModel):
     score: float = Field(..., description="Итоговая оценка соответствия 0..100")
     reasons: list[str] = Field(default_factory=list)
     assigned_at: datetime = Field(default_factory=_utcnow)
+    partial: bool = Field(False, description="Назначено с частичным покрытием навыков")
+    manual: bool = Field(False, description="Назначено вручную координатором")
 
 
 class Unassigned(BaseModel):
@@ -126,6 +135,34 @@ class DashboardResponse(BaseModel):
     assignments: list[Assignment] = Field(default_factory=list)
     unassigned: list[Unassigned] = Field(default_factory=list)
     experts: list[ExpertLoad] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------- #
+#  Объявления (вторая часть задачи ИКТ: «управление заявками и объявлениями»)
+# --------------------------------------------------------------------------- #
+class AnnouncementCreate(BaseModel):
+    """Входная схема объявления (id и дату выставляет система)."""
+
+    title: str
+    body: str = ""
+    type: AnnouncementType = "expert_needed"
+
+
+class Announcement(AnnouncementCreate):
+    """Доменная модель объявления."""
+
+    id: str
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+# --------------------------------------------------------------------------- #
+#  Ручное назначение
+# --------------------------------------------------------------------------- #
+class ManualAssignInput(BaseModel):
+    """Координатор вручную закрепляет исполнителя за заявкой."""
+
+    request_id: str
+    expert_id: str
 
 
 class ParseInput(BaseModel):

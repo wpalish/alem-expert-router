@@ -1,7 +1,7 @@
 """Демо-данные в духе Alem School: пул менторов/экспертов и входящие заявки."""
 from __future__ import annotations
 
-from .models import Expert, Request
+from .models import Announcement, Expert, Request
 
 EXPERTS: list[Expert] = [
     Expert(id="e1", name="Айгерим", role="expert",
@@ -32,4 +32,17 @@ REQUESTS: list[Request] = [
             required_skills={"sql": 3, "data": 3}, priority=3),
     Request(id="r6", title="Мобильное приложение",
             required_skills={"flutter": 4}, priority=3),  # нет такого навыка -> unassigned
+]
+
+ANNOUNCEMENTS: list[Announcement] = [
+    Announcement(
+        id="a1", title="Требуется ментор по Data Science",
+        body="Нужен наставник для группы из 8 студентов на летний интенсив.",
+        type="expert_needed",
+    ),
+    Announcement(
+        id="a2", title="Хакатон «EdTech Solutions»",
+        body="Регистрация до 15 июля. Приглашаем экспертов в жюри.",
+        type="event",
+    ),
 ]

@@ -147,6 +147,42 @@
   .guide a { color: var(--accent); font-weight: 600; cursor: pointer; text-decoration: none; }
   .guide a:hover { text-decoration: underline; }
   .hidden { display: none !important; }
+
+  /* --- метрики эффекта --- */
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: .8rem; margin-bottom: 1.4rem; }
+  .metric { background: var(--surface); border: 1px solid var(--line); padding: 1rem;
+    border-radius: var(--radius); text-align: center; box-shadow: var(--shadow); }
+  .metric-val { font-size: 1.35rem; font-weight: 800; color: var(--accent); line-height: 1.15; }
+  .metric-label { font-size: .76rem; color: var(--muted); margin-top: .28rem; }
+  @media (max-width: 600px) { .metrics { grid-template-columns: repeat(2, 1fr); } }
+
+  /* --- частичное / ручное назначение --- */
+  .item.partial { border-left: 3px solid var(--warn); padding-left: .6rem; }
+  .item.manual  { border-left: 3px solid var(--accent); padding-left: .6rem; }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .pill.man  { background: var(--soft); color: var(--accent-d); }
+  .reasons li.warn::before { content: "⚠"; color: var(--warn); }
+  .u { align-items: center; }
+  .u .grow { flex: 1; }
+  button.btn.tiny { padding: .3rem .65rem; font-size: .78rem; border-radius: 8px; }
+
+  /* --- модалка выбора эксперта (ручное назначение) --- */
+  .modal-bg { position: fixed; inset: 0; background: oklch(0% 0 0 / .35); display: grid;
+    place-items: center; z-index: 60; padding: 1rem; }
+  .modal { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+    max-width: 460px; width: 100%; max-height: 80vh; overflow: auto; padding: 1.2rem; }
+  .modal h3 { margin: 0 0 .2rem; }
+  .modal .sub { font-size: .82rem; color: var(--muted); margin-bottom: .8rem; }
+  .pick { display: flex; align-items: center; gap: .7rem; width: 100%; text-align: left;
+    padding: .6rem .7rem; border: 1px solid var(--line); border-radius: 11px; background: var(--surface);
+    cursor: pointer; margin-bottom: .5rem; font: inherit; transition: background 120ms; }
+  .pick:hover { background: var(--soft); }
+  .pick .av { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
+    background: var(--soft); color: var(--accent-d); font-weight: 800; flex: none; }
+  .pick .pmeta { flex: 1; min-width: 0; }
+  .pick .pmeta b { font-size: .92rem; }
+  .pick .pmeta .ps { font-size: .76rem; color: var(--muted); }
+  .modal .close { margin-top: .4rem; width: 100%; }
 </style>
 </head>
 <body>
@@ -156,6 +192,7 @@
       <button data-tab="assign" class="on">Распределение</button>
       <button data-tab="requests">Заявки <span class="cnt" id="cntReq"></span></button>
       <button data-tab="experts">Эксперты <span class="cnt" id="cntExp"></span></button>
+      <button data-tab="announcements">Объявления <span class="cnt" id="cntAnn"></span></button>
     </nav>
     <div class="spacer"></div>
     <button class="btn sm" id="seedBtn">Демо-данные</button>
@@ -165,6 +202,7 @@
     <!-- ===== РАСПРЕДЕЛЕНИЕ ===== -->
     <section id="view-assign">
       <div id="guide" class="guide"></div>
+      <div id="metrics" class="metrics"></div>
       <div class="grid">
       <aside style="display:grid; gap:1.4rem;">
         <section class="card"><h2>Сводка</h2>
@@ -189,9 +227,9 @@
         <form id="reqForm">
           <label>Название
             <input id="rTitle" required placeholder="Чат-бот поддержки студентов" /></label>
-          <label>Опиши задачу словами — AI извлечёт компетенции
+          <label>Опиши задачу словами — компетенции распознаются по ключевым словам
             <textarea id="rText" placeholder="Нужен ассистент по базе знаний на Python с элементами ML…"></textarea></label>
-          <button type="button" class="btn ai" id="parseBtn">🪄 Извлечь компетенции (AI)</button>
+          <button type="button" class="btn ai" id="parseBtn">🔍 Распознать компетенции (по ключевым словам)</button>
           <div class="method" id="rMethod"></div>
           <label>Требуемые компетенции — нажми, чтобы выбрать
             <div class="picker" id="rPicker"></div></label>
@@ -226,43 +264,40 @@
       </section>
       <section class="card"><h2>Исполнители</h2><div class="list" id="expList" style="padding:.4rem 1.1rem 1.1rem"></div></section>
     </section>
-  </main>
 
+    <!-- ===== ОБЪЯВЛЕНИЯ ===== -->
+    <section id="view-announcements" class="split hidden">
+      <section class="card"><h2>Новое объявление</h2>
+        <form id="annForm">
+          <label>Тема <input id="annTitle" required placeholder="Требуется ментор по Data Science" /></label>
+          <label>Описание <textarea id="annBody" rows="3" required placeholder="Кому адресовано, что нужно, сроки…"></textarea></label>
+          <label>Тип
+            <select id="annType">
+              <option value="expert_needed">Поиск эксперта</option>
+              <option value="task_available">Доступная задача</option>
+              <option value="event">Мероприятие</option>
+            </select></label>
+          <button class="btn primary" type="submit">Опубликовать</button>
+        </form>
+      </section>
+      <section class="card"><h2>Лента объявлений</h2><div class="list" id="annList" style="padding:.4rem 1.1rem 1.1rem"></div></section>
+    </section>
+  </main>
 <script>
-const $ = (s) => document.querySelector(s);
-const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-const api = {
-  get: (u) => fetch(u).then(r => r.json()),
-  post: async (u, b) => {
-    const r = await fetch(u, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(b) });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.detail || ("ошибка " + r.status));
-    return d;
-  },
-  del: (u) => fetch(u, { method:"DELETE" }).then(r => r.json()),
-};
-const parseSkills = (str) => {
-  const out = {};
-  (str || "").split(",").forEach(p => {
-    const m = p.trim().match(/^(.+?)\s*[:=]\s*(\d)$/);
-    if (m) { const lvl = +m[2]; if (lvl >= 1) out[m[1].trim().toLowerCase()] = Math.min(5, lvl); }
-  });
-  return out;
-};
-const uid = (p) => p + (crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Date.now().toString(36));
-function notify(msg, ok = false) {
-  let n = document.getElementById("toast");
-  if (!n) { n = document.createElement("div"); n.id = "toast"; document.body.appendChild(n); }
-  n.textContent = msg; n.className = "toast " + (ok ? "ok" : "err");
-  requestAnimationFrame(() => n.classList.add("show"));
-  clearTimeout(n._t); n._t = setTimeout(() => n.classList.remove("show"), 2800);
-}
-const skillStr = (sk) => Object.entries(sk).map(([k,v]) => `${k} ${v}`).join(" · ");
+/* Клиентская версия для GitHub Pages: логика матчинга и AI-извлечения
+   перенесены в браузер (зеркало app/matching.py и app/ai.py). Данные — в
+   localStorage. Полная версия с FastAPI-бэком, БД и LLM — в репозитории. */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const uid = p => p + (crypto.randomUUID ? crypto.randomUUID().slice(0,8) : Date.now().toString(36));
+function notify(msg, ok=false){ let n=document.getElementById("toast"); if(!n){n=document.createElement("div");n.id="toast";document.body.appendChild(n);} n.textContent=msg; n.className="toast "+(ok?"ok":"err"); requestAnimationFrame(()=>n.classList.add("show")); clearTimeout(n._t); n._t=setTimeout(()=>n.classList.remove("show"),2800); }
+const parseSkills = str => { const o={}; (str||"").split(",").forEach(p=>{ const m=p.trim().match(/^(.+?)\s*[:=]\s*(\d)$/); if(m){const l=+m[2]; if(l>=1) o[m[1].trim().toLowerCase()]=Math.min(5,l);} }); return o; };
+const skillStr = sk => Object.entries(sk).map(([k,v])=>`${k} ${v}`).join(" · ");
 
 /* ---- пикер навыков (кнопки + уровни 1..5) ---- */
 const SKILLS = ["python","fastapi","django","react","typescript","sql","ml","data","nlp","devops","docker","flutter","ui"];
 function makePicker(id){
-  const state = {}; const el = document.getElementById(id);
+  const state={}; const el=document.getElementById(id);
   function render(){
     el.innerHTML = `<div class="palette">${SKILLS.map(s=>`<button type="button" class="sk${s in state?" on":""}" data-s="${s}">${s}</button>`).join("")}</div>`
       + (Object.keys(state).length ? `<div class="chosen">${Object.entries(state).map(([s,l])=>`<div class="ch"><span>${esc(s)}</span><div class="lv">${[1,2,3,4,5].map(n=>`<button type="button" class="dot${n<=l?" f":""}" data-s="${s}" data-l="${n}">${n}</button>`).join("")}</div><button type="button" class="rm" data-rm="${s}">✕</button></div>`).join("")}</div>` : "");
@@ -276,125 +311,232 @@ function makePicker(id){
 const reqPicker = makePicker("rPicker");
 const expPicker = makePicker("ePicker");
 
+/* ---- AI: извлечение компетенций по таксономии (как app/ai.py) ---- */
+const TAXONOMY = {python:["python","питон"],fastapi:["fastapi","фастапи"],django:["django","джанго"],react:["react","реакт"],typescript:["typescript","тайпскрипт"],sql:["sql","postgres","база данных","бд","запрос"],ml:["ml","machine learning","машинн","модел","обучени"],data:["data engineer","данны","аналитик","etl","пайплайн"],nlp:["nlp","llm","чат-бот","чатбот","распознавани","текст","язык"],devops:["devops","ci/cd","деплой","kubernetes","k8s"],docker:["docker","докер","контейнер"],flutter:["flutter","флаттер"],ui:["ui","ux","интерфейс","вёрстк","верстк","frontend","фронт"]};
+const NEG=/(^|[^а-яёa-z])(не|без|нет|никак|исключ)/i;
+function isNegated(low,pos){ return NEG.test(low.slice(Math.max(0,pos-25),pos)); }
+function extractSkills(text){ const low=text.toLowerCase();
+  const lvl=/увере|эксперт|senior|глубок|сильн|advanced|продвинут/i.test(low)?4:(/базов|junior|основ|начальн|джун/i.test(low)?2:3);
+  const o={}; for(const[s,t]of Object.entries(TAXONOMY)){ for(const x of t){ const pos=low.indexOf(x); if(pos!==-1&&!isNegated(low,pos)){ o[s]=lvl; break; } } } return o; }
+
+/* ---- демо-данные + состояние (localStorage) ---- */
+const SEED={experts:[
+  {id:"e1",name:"Айгерим",role:"expert",skills:{python:5,fastapi:5,ml:4},capacity:3,current_load:0,available:true,rating:4.9},
+  {id:"e2",name:"Данияр",role:"mentor",skills:{python:4,django:5,sql:4},capacity:4,current_load:0,available:true,rating:4.6},
+  {id:"e3",name:"Жанель",role:"freelancer",skills:{react:5,typescript:5,ui:4},capacity:2,current_load:0,available:true,rating:4.7},
+  {id:"e4",name:"Тимур",role:"expert",skills:{devops:5,docker:5,python:3},capacity:3,current_load:0,available:true,rating:4.4},
+  {id:"e5",name:"Сабина",role:"mentor",skills:{ml:5,python:5,data:5},capacity:2,current_load:0,available:true,rating:5.0}],
+ requests:[
+  {id:"r1",title:"Чат-бот поддержки студентов",required_skills:{python:4,ml:3},priority:5},
+  {id:"r2",title:"Веб-портал заявок",required_skills:{react:4,typescript:4},priority:4},
+  {id:"r3",title:"Бэкенд распределения экспертов",required_skills:{python:4,fastapi:4},priority:5},
+  {id:"r4",title:"CI/CD и контейнеризация",required_skills:{devops:4,docker:4},priority:2},
+  {id:"r5",title:"Аналитика загрузки менторов",required_skills:{sql:3,data:3},priority:3},
+  {id:"r6",title:"Мобильное приложение",required_skills:{flutter:4},priority:3}],
+ announcements:[
+  {id:"a1",title:"Требуется ментор по Data Science",body:"Нужен наставник для группы из 8 студентов на летний интенсив.",type:"expert_needed",date:"2026-06-20"},
+  {id:"a2",title:"Хакатон «EdTech Solutions»",body:"Регистрация до 15 июля. Приглашаем экспертов в жюри.",type:"event",date:"2026-06-18"}]};
+const clone=o=>JSON.parse(JSON.stringify(o));
+function load(){ try{ const s=JSON.parse(localStorage.getItem("alem")); if(s&&s.experts){ if(!s.announcements) s.announcements=clone(SEED.announcements); if(!s.manualAssignments) s.manualAssignments=[]; return s; } }catch(e){} return clone(SEED); }
+let state=load();
+const save=()=>localStorage.setItem("alem",JSON.stringify(state));
+const seedData=()=>{ state=clone(SEED); save(); };
+
+/* ---- матчинг (зеркало app/matching.py) ----
+   ГЛОБАЛЬНЫЙ оптимум через венгерский алгоритм (задача о назначениях), а не
+   жадный перебор. Эксперт с ёмкостью N даёт N «слотов». Если полное покрытие
+   невозможно — допускается частичное (со штрафом). */
+const W={competency:.6,load:.25,rating:.15};
+
+function score(e,r,partial=false,maxCap=1){
+  if(!e.available) return null;
+  const free=e.capacity-e.current_load; if(free<=0) return null;
+  const det=[],missing=[]; const entries=Object.entries(r.required_skills); let anyHit=0;
+  for(const[s,m]of entries){ const h=e.skills[s]||0;
+    if(h>=m){ det.push(`${s} (${h}≥${m})`); anyHit++; }
+    else if(partial&&h>0){ det.push(`${s} (${h}/${m}, частично)`); missing.push(`${s} (${h}<${m})`); anyHit++; }
+    else if(partial){ missing.push(`${s} (отсутствует)`); }
+    else return null; // строгий режим: один промах — отказ
+  }
+  // частичное допускается, только если есть хоть какое-то реальное пересечение
+  if(partial&&anyHit===0) return null;
+  // компетентность: доля покрытия уровня, усреднённая по требуемым навыкам
+  const comp=entries.length? entries.reduce((a,[s,m])=>a+Math.min(e.skills[s]||0,m)/m,0)/entries.length : .5;
+  const loadBal=Math.min(free/Math.max(maxCap,1),1); // абсолютная свободная ёмкость, нормированная по пулу
+  const tw=W.competency+W.load+W.rating;
+  const penalty=partial?Math.min(missing.length*0.08,0.6):0;
+  const sc=Math.round((W.competency*comp+W.load*loadBal+W.rating*(e.rating/5))/tw*(1-penalty)*1000)/10;
+  const reasons=[`Покрывает навыки: ${det.join(", ")}`,`Загрузка ${e.current_load}/${e.capacity} — свободно ${free}`,`Рейтинг ${e.rating}/5`,`Роль: ${e.role}`];
+  if(missing.length) reasons.push(`⚠ Частичное покрытие: ${missing.join(", ")}`);
+  return {e,score:sc,partial,missing:missing.length,reasons}; }
+
+function explainNo(r,pool){ const sk=pool.filter(e=>Object.entries(r.required_skills).every(([s,l])=>(e.skills[s]||0)>=l));
+  if(!sk.length) return `Нет исполнителя с компетенциями: ${Object.entries(r.required_skills).map(([s,l])=>`${s}≥${l}`).join(", ")}`;
+  if(!sk.some(e=>e.available)) return "Все подходящие исполнители помечены как недоступны";
+  return "Все подходящие исполнители заняты (нет свободной ёмкости)"; }
+
+/* Венгерский алгоритм (минимизация), прямоугольная матрица -> col для каждой row или -1 */
+function hungarian(cost){
+  const nR=cost.length; if(!nR) return []; const nC=cost[0].length; if(!nC) return new Array(nR).fill(-1);
+  const n=Math.max(nR,nC); const BIG=Math.max(...cost.flat(),0)+1;
+  const a=Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=>(i<nR&&j<nC)?cost[i][j]:BIG));
+  const INF=Infinity, u=new Array(n+1).fill(0), v=new Array(n+1).fill(0), p=new Array(n+1).fill(0), way=new Array(n+1).fill(0);
+  for(let i=1;i<=n;i++){ p[0]=i; let j0=0; const minv=new Array(n+1).fill(INF), used=new Array(n+1).fill(false);
+    do{ used[j0]=true; const i0=p[j0]; let delta=INF,j1=-1;
+      for(let j=1;j<=n;j++) if(!used[j]){ const cur=a[i0-1][j-1]-u[i0]-v[j]; if(cur<minv[j]){minv[j]=cur;way[j]=j0;} if(minv[j]<delta){delta=minv[j];j1=j;} }
+      for(let j=0;j<=n;j++){ if(used[j]){u[p[j]]+=delta;v[j]-=delta;} else minv[j]-=delta; }
+      j0=j1; }while(p[j0]!==0);
+    do{ const j1=way[j0]; p[j0]=p[j1]; j0=j1; }while(j0); }
+  const res=new Array(nR).fill(-1);
+  for(let j=1;j<=n;j++){ const i=p[j]; if(i>=1&&i<=nR&&(j-1)<nC) res[i-1]=j-1; }
+  return res; }
+
+function assignAll(){
+  const pool=clone(state.experts);
+  const total=state.requests.length;
+  const maxCap=Math.max(1,...pool.map(e=>e.capacity));
+  // приоритет ↓, дедлайн ↑, id ↑ (кортеж, без конкатенации строк)
+  const ord=clone(state.requests).sort((a,b)=> (b.priority-a.priority)
+    || String(a.deadline||"9999-12-31").localeCompare(String(b.deadline||"9999-12-31"))
+    || String(a.id).localeCompare(String(b.id)) );
+  // слоты исполнителей
+  const slots=[], slotRank=[];
+  [...pool].sort((x,y)=>String(x.id).localeCompare(String(y.id))).forEach(e=>{
+    for(let k=0;k<e.capacity-e.current_load;k++){ slots.push(e); slotRank.push(k); } });
+
+  const A=[],U=[];
+  if(!slots.length){ ord.forEach(r=>U.push({request_id:r.id,request_title:r.title,reason:explainNo(r,pool)})); return {assignments:A,unassigned:U,matched:0,total}; }
+
+  const BIG=1e6; const cand={}; const cost=[];
+  ord.forEach((r,ri)=>{
+    const pr=Number(r.priority)||3; const pmul=1+(pr-1)*0.5;
+    // сначала пробуем строгое покрытие; если у заявки НИ ОДНОГО строгого кандидата — разрешаем частичное
+    const hasStrict=pool.some(e=>score(e,r,false,maxCap));
+    const row=slots.map((e,sj)=>{
+      const c=score(e,r,!hasStrict,maxCap);
+      if(!c) return BIG;
+      cand[ri+"_"+sj]=c;
+      return -c.score*pmul + slotRank[sj]*0.01; // штраф за концентрацию -> разнос по людям
+    });
+    cost.push(row);
+  });
+
+  const sol=hungarian(cost); const usedSlot=new Set();
+  ord.forEach((r,ri)=>{
+    const sj=sol[ri]; const c=(sj!==-1)?cand[ri+"_"+sj]:null;
+    if(!c||usedSlot.has(sj)){ U.push({request_id:r.id,request_title:r.title,reason:explainNo(r,pool)}); return; }
+    usedSlot.add(sj);
+    const reasons=[...c.reasons];
+    if((Number(r.priority)||3)>=4) reasons.push(`Заявка высокого приоритета (${r.priority}/5) — учтена с повышенным весом`);
+    if(c.partial) reasons.push("Назначение с допуском частичного покрытия (точного исполнителя нет)");
+    // «почему именно этот»: сравнение с лучшим альтернативным слотом ДРУГОГО эксперта
+    const alts=slots.map((e,k)=>({e,k,c:cand[ri+"_"+k]})).filter(x=>x.c&&x.e.id!==c.e.id);
+    if(alts.length){ alts.sort((p,q)=>q.c.score-p.c.score); const s2=alts[0];
+      const diff=Math.round((c.score-s2.c.score)*10)/10;
+      let why;
+      if(Math.abs(diff)<1) why=`Минимальное преимущество (${diff} б.) перед ${s2.e.name} — выбран по балансу нагрузки`;
+      else if(c.e.rating>s2.e.rating) why=`Преимущество по рейтингу (${c.e.rating} против ${s2.e.rating}) перед ${s2.e.name}`;
+      else why=`Лучшее соответствие (${c.score} против ${s2.c.score}) по сравнению с ${s2.e.name}`;
+      reasons.push(why); }
+    A.push({request_id:r.id,request_title:r.title,expert_id:c.e.id,expert_name:c.e.name,score:c.score,partial:c.partial,reasons});
+  });
+  return {assignments:A,unassigned:U,matched:A.length,total}; }
+
+/* ---- рендер ---- */
+function setCounts(){ $("#cntReq").textContent=state.requests.length; $("#cntExp").textContent=state.experts.length; const ann=$("#cntAnn"); if(ann) ann.textContent=(state.announcements||[]).length; }
+function buildGuide(){ const g=$("#guide"); if(!g||g.dataset.built) return; g.dataset.built="1";
+  g.innerHTML=`<div class="hd">Как это работает</div><div class="steps"><div class="step"><b>1.</b> Добавь <a data-go="requests">заявки</a> — что нужно сделать (с навыками)</div><div class="step"><b>2.</b> Добавь <a data-go="experts">экспертов</a> — кто может это сделать</div><div class="step"><b>3.</b> Система сама назначает лучшего — результат ниже ↓</div></div>`;
+  g.querySelectorAll("[data-go]").forEach(a=>a.onclick=()=>document.querySelector(`nav.tabs button[data-tab="${a.dataset.go}"]`).click()); }
+/* ручные назначения «перебивают» авто: убираем их из unassigned/auto */
+function combinedResult(){
+  const r=assignAll();
+  const manual=(state.manualAssignments||[]).filter(m=>state.requests.some(q=>q.id===m.request_id));
+  const manualIds=new Set(manual.map(m=>m.request_id));
+  const assignments=r.assignments.filter(a=>!manualIds.has(a.request_id))
+    .concat(manual.map(m=>({...m,score:null,manual:true})));
+  const unassigned=r.unassigned.filter(u=>!manualIds.has(u.request_id));
+  return {assignments,unassigned,total:r.total,matched:assignments.length}; }
+
+function dashboard(){ buildGuide(); setCounts(); const r=combinedResult();
+  const ld={}; state.experts.forEach(e=>ld[e.id]=0); r.assignments.forEach(a=>{ if(a.expert_id in ld) ld[a.expert_id]++; });
+  $("#matched").textContent=r.matched; $("#total").textContent=r.total; $("#rate").textContent=r.total?Math.round(r.matched/r.total*100)+"%":"—";
+  // метрики эффекта (п.3)
+  const manualCount=r.assignments.filter(a=>a.manual).length;
+  $("#metrics").innerHTML=`
+    <div class="metric"><div class="metric-val">${r.matched}</div><div class="metric-label">Назначено из ${r.total}</div></div>
+    <div class="metric"><div class="metric-val">${r.matched?"&lt; 1 сек":"—"}</div><div class="metric-label">Время распределения</div></div>
+    <div class="metric"><div class="metric-val">${manualCount}</div><div class="metric-label">Ручных операций</div></div>
+    <div class="metric"><div class="metric-val">${r.total?Math.round(r.matched/r.total*100)+"%":"—"}</div><div class="metric-label">Покрытие заявок</div></div>`;
+  $("#mentors").innerHTML=state.experts.map(e=>`<div class="mentor"><div class="row"><span>${esc(e.name)} <span class="role">· ${esc(e.role)}</span></span><span>${ld[e.id]}/${e.capacity}</span></div><div class="bar"><i data-w="${Math.min(ld[e.id]/e.capacity,1)}"></i></div></div>`).join("")||'<p class="empty">Нет исполнителей.</p>';
+  requestAnimationFrame(()=>document.querySelectorAll(".bar > i").forEach(i=>i.style.transform=`scaleX(${i.dataset.w})`));
+  $("#assignments").innerHTML=r.assignments.map(a=>{
+    const cls=a.manual?"item manual":(a.partial?"item partial":"item");
+    const badge=a.manual?'<span class="pill man">ручное</span>':(a.partial?'<span class="pill warn">частично</span>':(a.reasons.some(x=>x.includes("приоритет"))?'<span class="pill hi">приоритет</span>':""));
+    const sc=a.manual?"✋":Math.round(a.score);
+    return `<article class="${cls}"><div class="score">${sc}</div><div><h3>${esc(a.request_title)} ${badge}</h3><div class="who">→ <b>${esc(a.expert_name)}</b></div><ul class="reasons">${a.reasons.map(x=>`<li class="${x.startsWith("⚠")?"warn":""}">${esc(x)}</li>`).join("")}</ul></div></article>`;
+  }).join("")||'<p class="empty">Заявок нет — добавь во вкладке «Заявки».</p>';
+  $("#unassignedCard").classList.toggle("hidden",r.unassigned.length===0);
+  $("#unassigned").innerHTML=r.unassigned.map(x=>`<div class="u"><span class="x">✗</span><span class="grow">${esc(x.request_title)} — <em>${esc(x.reason)}</em></span><button class="btn tiny" data-manual="${esc(x.request_id)}">Назначить вручную</button></div>`).join("");
+  document.querySelectorAll("[data-manual]").forEach(b=>b.onclick=()=>openManual(b.dataset.manual)); }
+
+/* ---- ручное назначение (п.1): модалка выбора эксперта ---- */
+function openManual(reqId){
+  const req=state.requests.find(r=>r.id===reqId); if(!req) return;
+  const free=state.experts.filter(e=>e.available&&e.current_load<e.capacity);
+  if(!free.length){ notify("Нет доступных исполнителей со свободной ёмкостью"); return; }
+  const bg=document.createElement("div"); bg.className="modal-bg";
+  bg.innerHTML=`<div class="modal"><h3>Ручное назначение</h3><div class="sub">${esc(req.title)} — выбери исполнителя</div>
+    ${free.map(e=>`<button class="pick" data-e="${esc(e.id)}"><div class="av">${esc(e.name.slice(0,1))}</div><div class="pmeta"><b>${esc(e.name)}</b><div class="ps">${esc(e.role)} · ★${e.rating} · загрузка ${e.current_load}/${e.capacity} · ${esc(skillStr(e.skills))||"без навыков"}</div></div></button>`).join("")}
+    <button class="btn close">Отмена</button></div>`;
+  const close=()=>bg.remove();
+  bg.addEventListener("click",ev=>{ if(ev.target===bg) close(); });
+  bg.querySelector(".close").onclick=close;
+  bg.querySelectorAll(".pick").forEach(p=>p.onclick=()=>{
+    const e=state.experts.find(x=>x.id===p.dataset.e);
+    state.manualAssignments=(state.manualAssignments||[]).filter(m=>m.request_id!==reqId);
+    state.manualAssignments.push({request_id:reqId,request_title:req.title,expert_id:e.id,expert_name:e.name,reasons:["Назначено вручную координатором (авто-покрытие невозможно)"]});
+    save(); close(); dashboard(); notify(`${e.name} назначен(а) вручную`,true);
+  });
+  document.body.appendChild(bg); }
+
+/* ---- объявления (п.6) ---- */
+const ANN_LABEL={expert_needed:"🔍 Поиск эксперта",task_available:"📋 Доступная задача",event:"📅 Мероприятие"};
+function annList(){ setCounts(); const anns=state.announcements||[];
+  $("#annList").innerHTML=anns.map(a=>`<div class="row-card"><div class="av">${(ANN_LABEL[a.type]||"📢").slice(0,2)}</div><div class="meta"><b>${esc(a.title)}</b><div class="sub">${esc(ANN_LABEL[a.type]||"")} · ${esc(a.date)}</div><div style="font-size:.85rem;color:var(--muted);margin-top:.3rem">${esc(a.body)}</div></div><button class="del" data-da="${esc(a.id)}" title="Удалить">✕</button></div>`).join("")||'<p class="empty">Объявлений нет.</p>';
+  document.querySelectorAll("[data-da]").forEach(b=>b.onclick=()=>{ state.announcements=(state.announcements||[]).filter(x=>x.id!==b.dataset.da); save(); annList(); }); }
+function reqList(){ setCounts(); $("#reqList").innerHTML=clone(state.requests).sort((a,b)=>b.priority-a.priority).map(r=>`<div class="row-card"><div class="av">P${r.priority}</div><div class="meta"><b>${esc(r.title)}</b><div class="sub">${esc(skillStr(r.required_skills))||"без навыков"}</div></div><button class="del" data-dr="${esc(r.id)}" title="Удалить">✕</button></div>`).join("")||'<p class="empty">Заявок нет.</p>';
+  document.querySelectorAll("[data-dr]").forEach(b=>b.onclick=()=>{ state.requests=state.requests.filter(x=>x.id!==b.dataset.dr); state.manualAssignments=(state.manualAssignments||[]).filter(m=>m.request_id!==b.dataset.dr); save(); reqList(); }); }
+function expList(){ setCounts(); $("#expList").innerHTML=state.experts.map(e=>`<div class="row-card"><div class="av">${esc(e.name.slice(0,1))}</div><div class="meta"><b>${esc(e.name)}</b> <span style="font-size:.78rem;color:var(--muted)">· ${esc(e.role)} · ★${e.rating}</span><div class="sub">${esc(skillStr(e.skills))} · ёмкость ${e.capacity}</div></div><button class="del" data-de="${esc(e.id)}" title="Удалить">✕</button></div>`).join("")||'<p class="empty">Нет исполнителей.</p>';
+  document.querySelectorAll("[data-de]").forEach(b=>b.onclick=()=>{ state.experts=state.experts.filter(x=>x.id!==b.dataset.de); save(); expList(); }); }
+
 /* ---- вкладки ---- */
-document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => {
-  document.querySelectorAll("nav.tabs button").forEach(x => x.classList.toggle("on", x === b));
-  ["assign","requests","experts"].forEach(t => $("#view-"+t).classList.toggle("hidden", t !== b.dataset.tab));
-  if (b.dataset.tab === "assign") loadDashboard();
-  if (b.dataset.tab === "requests") loadRequests();
-  if (b.dataset.tab === "experts") loadExperts();
-}));
+const VIEWS={assign:dashboard,requests:reqList,experts:expList,announcements:annList};
+document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click",()=>{ document.querySelectorAll("nav.tabs button").forEach(x=>x.classList.toggle("on",x===b)); ["assign","requests","experts","announcements"].forEach(t=>$("#view-"+t).classList.toggle("hidden",t!==b.dataset.tab)); (VIEWS[b.dataset.tab])(); }));
 
-/* ---- распределение ---- */
-function buildGuide() {
-  const g = $("#guide"); if (!g || g.dataset.built) return; g.dataset.built = "1";
-  g.innerHTML = `<div class="hd">Как это работает</div><div class="steps">
-    <div class="step"><b>1.</b> Добавь <a data-go="requests">заявки</a> — что нужно сделать (с навыками)</div>
-    <div class="step"><b>2.</b> Добавь <a data-go="experts">экспертов</a> — кто может это сделать</div>
-    <div class="step"><b>3.</b> Система сама назначает лучшего — результат ниже ↓</div></div>`;
-  g.querySelectorAll("[data-go]").forEach(a => a.onclick = () =>
-    document.querySelector(`nav.tabs button[data-tab="${a.dataset.go}"]`).click());
-}
-async function loadDashboard() {
-  const d = await api.get("/dashboard");
-  buildGuide();
-  $("#cntReq").textContent = d.total; $("#cntExp").textContent = d.experts.length;
-  $("#matched").textContent = d.matched; $("#total").textContent = d.total;
-  $("#rate").textContent = d.total ? Math.round(d.matched/d.total*100)+"%" : "—";
-  $("#mentors").innerHTML = d.experts.map(e => `
-    <div class="mentor"><div class="row"><span>${esc(e.name)} <span class="role">· ${esc(e.role)}</span></span>
-      <span>${e.assigned_now}/${e.capacity}</span></div>
-      <div class="bar"><i data-w="${Math.min(e.utilization,1)}"></i></div></div>`).join("")
-    || '<p class="empty">Нет исполнителей.</p>';
-  requestAnimationFrame(() => document.querySelectorAll(".bar > i").forEach(i => i.style.transform = `scaleX(${i.dataset.w})`));
-  $("#assignments").innerHTML = d.assignments.map(a => `
-    <article class="item"><div class="score">${Math.round(a.score)}</div>
-      <div><h3>${esc(a.request_title)} ${a.reasons.some(r=>r.includes("приоритет"))?'<span class="pill hi">приоритет</span>':""}</h3>
-        <div class="who">→ <b>${esc(a.expert_name)}</b></div>
-        <ul class="reasons">${a.reasons.map(r=>`<li>${esc(r)}</li>`).join("")}</ul></div></article>`).join("")
-    || '<p class="empty">Заявок пока нет — добавь во вкладке «Заявки».</p>';
-  $("#unassignedCard").classList.toggle("hidden", d.unassigned.length === 0);
-  $("#unassigned").innerHTML = d.unassigned.map(x =>
-    `<div class="u"><span class="x">✗</span><span>${esc(x.request_title)} — <em>${esc(x.reason)}</em></span></div>`).join("");
-}
+/* ---- формы ---- */
+$("#parseBtn").addEventListener("click",()=>{ const t=$("#rText").value.trim(); if(!t){notify("Сначала опиши задачу словами");return;} const sk=extractSkills(t); reqPicker.set(sk);
+  $("#rMethod").textContent = Object.keys(sk).length ? "🔑 распознано по ключевым словам — поправь кнопками" : "навыки не распознаны — выбери кнопками ниже"; });
+$("#reqForm").addEventListener("submit",e=>{ e.preventDefault(); const sk=reqPicker.get();
+  if(!Object.keys(sk).length){ notify("Выбери хотя бы одну компетенцию — кнопки ниже"); return; }
+  state.requests.push({id:uid("r"),title:$("#rTitle").value.trim(),required_skills:sk,priority:+$("#rPriority").value}); save();
+  e.target.reset(); reqPicker.clear(); $("#rMethod").textContent=""; notify("Заявка добавлена",true); reqList(); });
+$("#expForm").addEventListener("submit",e=>{ e.preventDefault(); const sk=expPicker.get();
+  if(!Object.keys(sk).length){ notify("Выбери навыки исполнителя — кнопки ниже"); return; }
+  state.experts.push({id:uid("e"),name:$("#eName").value.trim(),role:$("#eRole").value,skills:sk,capacity:+$("#eCap").value,current_load:0,available:true,rating:+$("#eRating").value}); save();
+  e.target.reset(); expPicker.clear(); notify("Исполнитель добавлен",true); expList(); });
+$("#annForm").addEventListener("submit",e=>{ e.preventDefault();
+  if(!state.announcements) state.announcements=[];
+  state.announcements.unshift({id:uid("a"),title:$("#annTitle").value.trim(),body:$("#annBody").value.trim(),type:$("#annType").value,date:new Date().toISOString().slice(0,10)});
+  save(); e.target.reset(); notify("Объявление опубликовано",true); annList(); });
+$("#seedBtn").addEventListener("click",()=>{ seedData(); const on=document.querySelector("nav.tabs button.on").dataset.tab; (VIEWS[on])(); notify("Демо-данные загружены",true); });
 
-/* ---- заявки ---- */
-let aiSkills = {};
-async function loadRequests() {
-  const rs = await api.get("/requests");
-  $("#cntReq").textContent = rs.length;
-  $("#reqList").innerHTML = rs.map(r => `
-    <div class="row-card"><div class="av">P${r.priority}</div>
-      <div class="meta"><b>${esc(r.title)}</b><div class="sub">${esc(skillStr(r.required_skills)) || "без навыков"}</div></div>
-      <button class="del" data-del-req="${esc(r.id)}" title="Удалить">✕</button></div>`).join("")
-    || '<p class="empty">Заявок нет.</p>';
-  document.querySelectorAll("[data-del-req]").forEach(b => b.onclick = async () => {
-    await api.del("/requests/" + encodeURIComponent(b.dataset.delReq)); loadRequests();
-  });
-}
-$("#parseBtn").addEventListener("click", async () => {
-  const text = $("#rText").value.trim();
-  if (!text) { notify("Сначала опиши задачу словами"); return; }
-  $("#parseBtn").textContent = "⏳ Анализирую…";
-  try {
-    const res = await api.post("/requests/parse", { text });
-    reqPicker.set(res.skills || {});
-    $("#rMethod").textContent = Object.keys(res.skills || {}).length
-      ? (res.method === "llm" ? "🤖 AI распознал — проверь и поправь кнопками" : "🔑 распознано по ключевым словам — поправь кнопками")
-      : "навыки не распознаны — выбери кнопками ниже";
-  } catch (err) { notify("AI недоступен: " + err.message); }
-  $("#parseBtn").textContent = "🪄 Извлечь компетенции (AI)";
-});
-$("#reqForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const skills = reqPicker.get();
-  if (!Object.keys(skills).length) { notify("Выбери хотя бы одну компетенцию — кнопки ниже"); return; }
-  try {
-    await api.post("/requests", {
-      id: uid("r"), title: $("#rTitle").value.trim(),
-      description: $("#rText").value.trim(), required_skills: skills,
-      priority: +$("#rPriority").value,
-    });
-    e.target.reset(); reqPicker.clear(); $("#rMethod").textContent = "";
-    notify("Заявка добавлена", true); loadRequests();
-  } catch (err) { notify("Не удалось: " + err.message); }
-});
+/* ---- демо-баннер ---- */
+const banner=document.createElement("div");
+banner.style.cssText="background:var(--soft);color:var(--accent-d);padding:.65rem 1rem;border-radius:11px;font-size:.85rem;margin-bottom:1.3rem;font-weight:600";
+banner.innerHTML='⚡ Эта страница раздаётся бэкендом (FastAPI). Тот же алгоритм распределения доступен и как REST API — открой <a href="/docs" style="color:var(--accent)">/docs</a>. Данные интерфейса хранятся локально (демо-режим).';
+document.querySelector("main").prepend(banner);
 
-/* ---- эксперты ---- */
-async function loadExperts() {
-  const es = await api.get("/experts");
-  $("#cntExp").textContent = es.length;
-  $("#expList").innerHTML = es.map(e => `
-    <div class="row-card"><div class="av">${esc(e.name.slice(0,1))}</div>
-      <div class="meta"><b>${esc(e.name)}</b> <span class="role" style="font-size:.78rem;color:var(--muted)">· ${esc(e.role)} · ★${e.rating}</span>
-        <div class="sub">${esc(skillStr(e.skills))} · ёмкость ${e.capacity}</div></div>
-      <button class="del" data-del-exp="${esc(e.id)}" title="Удалить">✕</button></div>`).join("")
-    || '<p class="empty">Исполнителей нет.</p>';
-  document.querySelectorAll("[data-del-exp]").forEach(b => b.onclick = async () => {
-    await api.del("/experts/" + encodeURIComponent(b.dataset.delExp)); loadExperts();
-  });
-}
-$("#expForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const skills = expPicker.get();
-  if (!Object.keys(skills).length) { notify("Выбери навыки исполнителя — кнопки ниже"); return; }
-  try {
-    await api.post("/experts", {
-      id: uid("e"), name: $("#eName").value.trim(), role: $("#eRole").value,
-      skills, capacity: +$("#eCap").value, rating: +$("#eRating").value,
-    });
-    e.target.reset(); expPicker.clear(); notify("Исполнитель добавлен", true); loadExperts();
-  } catch (err) { notify("Не удалось: " + err.message); }
-});
-
-/* ---- демо ---- */
-$("#seedBtn").addEventListener("click", async () => {
-  await api.post("/seed", {});
-  const on = document.querySelector("nav.tabs button.on").dataset.tab;
-  on === "requests" ? loadRequests() : on === "experts" ? loadExperts() : loadDashboard();
-});
-
-loadDashboard();
+dashboard();
 </script>
 </body>
 </html>

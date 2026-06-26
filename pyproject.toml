@@ -1,6 +1,6 @@
 [project]
 name = "alem-expert-router"
-version = "0.2.0"
+version = "0.3.0"
 description = "Умное распределение экспертов, менторов и фрилансеров по заявкам"
 requires-python = ">=3.10"
 
