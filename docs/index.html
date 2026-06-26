@@ -188,11 +188,11 @@
 <body>
   <header class="top">
     <div class="brand"><div class="logo">A</div><div><b>Alem Expert Router</b><div class="tag">Автоматическое распределение заявок по исполнителям</div></div></div>
-    <nav class="tabs">
-      <button data-tab="assign" class="on">Распределение</button>
-      <button data-tab="requests">Заявки <span class="cnt" id="cntReq"></span></button>
-      <button data-tab="experts">Эксперты <span class="cnt" id="cntExp"></span></button>
-      <button data-tab="announcements">Объявления <span class="cnt" id="cntAnn"></span></button>
+    <nav class="tabs" role="tablist" aria-label="Разделы">
+      <button data-tab="assign" id="tab-assign" role="tab" aria-selected="true" aria-controls="view-assign" class="on">Распределение</button>
+      <button data-tab="requests" id="tab-requests" role="tab" aria-selected="false" aria-controls="view-requests">Заявки <span class="cnt" id="cntReq"></span></button>
+      <button data-tab="experts" id="tab-experts" role="tab" aria-selected="false" aria-controls="view-experts">Эксперты <span class="cnt" id="cntExp"></span></button>
+      <button data-tab="announcements" id="tab-announcements" role="tab" aria-selected="false" aria-controls="view-announcements">Объявления <span class="cnt" id="cntAnn"></span></button>
     </nav>
     <div class="spacer"></div>
     <button class="btn sm" id="seedBtn">Демо-данные</button>
@@ -200,7 +200,7 @@
 
   <main>
     <!-- ===== РАСПРЕДЕЛЕНИЕ ===== -->
-    <section id="view-assign">
+    <section id="view-assign" role="tabpanel" aria-labelledby="tab-assign" tabindex="0">
       <div id="guide" class="guide"></div>
       <div id="metrics" class="metrics"></div>
       <div class="grid">
@@ -222,7 +222,7 @@
     </section>
 
     <!-- ===== ЗАЯВКИ ===== -->
-    <section id="view-requests" class="split hidden">
+    <section id="view-requests" class="split hidden" role="tabpanel" aria-labelledby="tab-requests" tabindex="0">
       <section class="card"><h2>Новая заявка</h2>
         <form id="reqForm">
           <label>Название
@@ -246,7 +246,7 @@
     </section>
 
     <!-- ===== ЭКСПЕРТЫ ===== -->
-    <section id="view-experts" class="split hidden">
+    <section id="view-experts" class="split hidden" role="tabpanel" aria-labelledby="tab-experts" tabindex="0">
       <section class="card"><h2>Новый исполнитель</h2>
         <form id="expForm">
           <label>Имя <input id="eName" required placeholder="Айгерим" /></label>
@@ -266,7 +266,7 @@
     </section>
 
     <!-- ===== ОБЪЯВЛЕНИЯ ===== -->
-    <section id="view-announcements" class="split hidden">
+    <section id="view-announcements" class="split hidden" role="tabpanel" aria-labelledby="tab-announcements" tabindex="0">
       <section class="card"><h2>Новое объявление</h2>
         <form id="annForm">
           <label>Тема <input id="annTitle" required placeholder="Требуется ментор по Data Science" /></label>
@@ -299,8 +299,8 @@ const SKILLS = ["python","fastapi","django","react","typescript","sql","ml","dat
 function makePicker(id){
   const state={}; const el=document.getElementById(id);
   function render(){
-    el.innerHTML = `<div class="palette">${SKILLS.map(s=>`<button type="button" class="sk${s in state?" on":""}" data-s="${s}">${s}</button>`).join("")}</div>`
-      + (Object.keys(state).length ? `<div class="chosen">${Object.entries(state).map(([s,l])=>`<div class="ch"><span>${esc(s)}</span><div class="lv">${[1,2,3,4,5].map(n=>`<button type="button" class="dot${n<=l?" f":""}" data-s="${s}" data-l="${n}">${n}</button>`).join("")}</div><button type="button" class="rm" data-rm="${s}">✕</button></div>`).join("")}</div>` : "");
+    el.innerHTML = `<div class="palette" role="group" aria-label="Навыки — нажми, чтобы выбрать">${SKILLS.map(s=>`<button type="button" class="sk${s in state?" on":""}" data-s="${s}" aria-pressed="${s in state?"true":"false"}">${s}</button>`).join("")}</div>`
+      + (Object.keys(state).length ? `<div class="chosen">${Object.entries(state).map(([s,l])=>`<div class="ch"><span>${esc(s)}</span><div class="lv" role="group" aria-label="${esc(s)}: уровень">${[1,2,3,4,5].map(n=>`<button type="button" class="dot${n<=l?" f":""}" data-s="${s}" data-l="${n}" aria-label="${esc(s)}: уровень ${n} из 5" aria-pressed="${n<=l?"true":"false"}">${n}</button>`).join("")}</div><button type="button" class="rm" data-rm="${s}" aria-label="Убрать навык ${esc(s)}">✕</button></div>`).join("")}</div>` : "");
     el.querySelectorAll(".sk").forEach(b=>b.onclick=()=>{ const s=b.dataset.s; (s in state)?delete state[s]:state[s]=3; render(); });
     el.querySelectorAll(".dot").forEach(b=>b.onclick=()=>{ state[b.dataset.s]=+b.dataset.l; render(); });
     el.querySelectorAll(".rm").forEach(b=>b.onclick=()=>{ delete state[b.dataset.rm]; render(); });
@@ -511,7 +511,10 @@ function expList(){ setCounts(); $("#expList").innerHTML=state.experts.map(e=>`<
 
 /* ---- вкладки ---- */
 const VIEWS={assign:dashboard,requests:reqList,experts:expList,announcements:annList};
-document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click",()=>{ document.querySelectorAll("nav.tabs button").forEach(x=>x.classList.toggle("on",x===b)); ["assign","requests","experts","announcements"].forEach(t=>$("#view-"+t).classList.toggle("hidden",t!==b.dataset.tab)); (VIEWS[b.dataset.tab])(); }));
+const _tabBtns=[...document.querySelectorAll("nav.tabs button")];
+function activateTab(b){ _tabBtns.forEach(x=>{ const on=x===b; x.classList.toggle("on",on); x.setAttribute("aria-selected",on?"true":"false"); }); ["assign","requests","experts","announcements"].forEach(t=>$("#view-"+t).classList.toggle("hidden",t!==b.dataset.tab)); (VIEWS[b.dataset.tab])(); }
+_tabBtns.forEach((b,i)=>{ b.addEventListener("click",()=>activateTab(b));
+  b.addEventListener("keydown",e=>{ let j=null; if(e.key==="ArrowRight"||e.key==="ArrowDown")j=(i+1)%_tabBtns.length; else if(e.key==="ArrowLeft"||e.key==="ArrowUp")j=(i-1+_tabBtns.length)%_tabBtns.length; else if(e.key==="Home")j=0; else if(e.key==="End")j=_tabBtns.length-1; if(j!==null){ e.preventDefault(); _tabBtns[j].focus(); activateTab(_tabBtns[j]); } }); });
 
 /* ---- формы ---- */
 $("#parseBtn").addEventListener("click",()=>{ const t=$("#rText").value.trim(); if(!t){notify("Сначала опиши задачу словами");return;} const sk=extractSkills(t); reqPicker.set(sk);
@@ -528,7 +531,7 @@ $("#annForm").addEventListener("submit",e=>{ e.preventDefault();
   if(!state.announcements) state.announcements=[];
   state.announcements.unshift({id:uid("a"),title:$("#annTitle").value.trim(),body:$("#annBody").value.trim(),type:$("#annType").value,date:new Date().toISOString().slice(0,10)});
   save(); e.target.reset(); notify("Объявление опубликовано",true); annList(); });
-$("#seedBtn").addEventListener("click",()=>{ seedData(); const on=document.querySelector("nav.tabs button.on").dataset.tab; (VIEWS[on])(); notify("Демо-данные загружены",true); });
+$("#seedBtn").addEventListener("click",()=>{ const has=(state.experts&&state.experts.length)||(state.requests&&state.requests.length)||(state.announcements&&state.announcements.length); if(has && !confirm("Загрузить демо-данные? Текущие заявки, исполнители и объявления будут заменены.")) return; seedData(); const on=document.querySelector("nav.tabs button.on").dataset.tab; (VIEWS[on])(); notify("Демо-данные загружены",true); });
 
 /* ---- демо-баннер ---- */
 const banner=document.createElement("div");
