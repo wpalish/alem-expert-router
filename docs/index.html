@@ -97,6 +97,21 @@
   .chip { font-size: .78rem; font-weight: 600; padding: .2rem .55rem; border-radius: 99px;
     background: var(--soft); color: var(--accent-d); }
   .method { font-size: .72rem; color: var(--muted); }
+  .picker { display: grid; gap: .6rem; }
+  .palette { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .sk { font: inherit; font-size: .85rem; font-weight: 600; padding: .5rem .8rem; border-radius: 99px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer;
+    transition: background 120ms, color 120ms; }
+  .sk.on { background: var(--accent); color: #fff; border-color: transparent; }
+  .chosen { display: grid; gap: .45rem; }
+  .ch { display: flex; align-items: center; gap: .6rem; padding: .45rem .6rem; background: var(--soft);
+    border-radius: 11px; flex-wrap: wrap; }
+  .ch > span { font-weight: 700; font-size: .88rem; color: var(--ink); min-width: 86px; }
+  .lv { display: flex; gap: .3rem; }
+  .dot { width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--line);
+    background: var(--surface); cursor: pointer; padding: 0; font-size: .7rem; color: var(--muted); }
+  .dot.f { background: var(--accent); border-color: transparent; color: #fff; }
+  .ch .rm { margin-left: auto; color: var(--danger); background: 0; border: 0; cursor: pointer; font-size: 1rem; }
   .list { display: grid; gap: .7rem; }
   .row-card { display: flex; align-items: center; gap: .9rem; padding: .85rem 1rem;
     background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
@@ -177,12 +192,9 @@
           <label>Опиши задачу словами — AI извлечёт компетенции
             <textarea id="rText" placeholder="Нужен ассистент по базе знаний на Python с элементами ML…"></textarea></label>
           <button type="button" class="btn ai" id="parseBtn">🪄 Извлечь компетенции (AI)</button>
-          <div>
-            <div class="chips" id="rChips"></div>
-            <div class="method" id="rMethod"></div>
-          </div>
-          <label>Навыки вручную (напр. python:4, ml:3)
-            <input id="rSkills" placeholder="python:4, ml:3" /></label>
+          <div class="method" id="rMethod"></div>
+          <label>Требуемые компетенции — нажми, чтобы выбрать
+            <div class="picker" id="rPicker"></div></label>
           <label>Приоритет
             <select id="rPriority">
               <option value="5">5 — наивысший</option><option value="4">4 — высокий</option>
@@ -207,8 +219,8 @@
             <label>Ёмкость <input id="eCap" type="number" min="1" value="3" /></label>
             <label>Рейтинг <input id="eRating" type="number" min="0" max="5" step="0.1" value="4.5" /></label>
           </div>
-          <label>Навыки (напр. python:5, fastapi:4)
-            <input id="eSkills" placeholder="python:5, fastapi:4" required /></label>
+          <label>Навыки — нажми, чтобы выбрать
+            <div class="picker" id="ePicker"></div></label>
           <button class="btn primary" type="submit">Добавить исполнителя</button>
         </form>
       </section>
@@ -225,6 +237,23 @@ const uid = p => p + (crypto.randomUUID ? crypto.randomUUID().slice(0,8) : Date.
 function notify(msg, ok=false){ let n=document.getElementById("toast"); if(!n){n=document.createElement("div");n.id="toast";document.body.appendChild(n);} n.textContent=msg; n.className="toast "+(ok?"ok":"err"); requestAnimationFrame(()=>n.classList.add("show")); clearTimeout(n._t); n._t=setTimeout(()=>n.classList.remove("show"),2800); }
 const parseSkills = str => { const o={}; (str||"").split(",").forEach(p=>{ const m=p.trim().match(/^(.+?)\s*[:=]\s*(\d)$/); if(m){const l=+m[2]; if(l>=1) o[m[1].trim().toLowerCase()]=Math.min(5,l);} }); return o; };
 const skillStr = sk => Object.entries(sk).map(([k,v])=>`${k} ${v}`).join(" · ");
+
+/* ---- пикер навыков (кнопки + уровни 1..5) ---- */
+const SKILLS = ["python","fastapi","django","react","typescript","sql","ml","data","nlp","devops","docker","flutter","ui"];
+function makePicker(id){
+  const state={}; const el=document.getElementById(id);
+  function render(){
+    el.innerHTML = `<div class="palette">${SKILLS.map(s=>`<button type="button" class="sk${s in state?" on":""}" data-s="${s}">${s}</button>`).join("")}</div>`
+      + (Object.keys(state).length ? `<div class="chosen">${Object.entries(state).map(([s,l])=>`<div class="ch"><span>${esc(s)}</span><div class="lv">${[1,2,3,4,5].map(n=>`<button type="button" class="dot${n<=l?" f":""}" data-s="${s}" data-l="${n}">${n}</button>`).join("")}</div><button type="button" class="rm" data-rm="${s}">✕</button></div>`).join("")}</div>` : "");
+    el.querySelectorAll(".sk").forEach(b=>b.onclick=()=>{ const s=b.dataset.s; (s in state)?delete state[s]:state[s]=3; render(); });
+    el.querySelectorAll(".dot").forEach(b=>b.onclick=()=>{ state[b.dataset.s]=+b.dataset.l; render(); });
+    el.querySelectorAll(".rm").forEach(b=>b.onclick=()=>{ delete state[b.dataset.rm]; render(); });
+  }
+  render();
+  return { get:()=>({...state}), set:o=>{ for(const k in state) delete state[k]; Object.assign(state,o); render(); }, clear:()=>{ for(const k in state) delete state[k]; render(); } };
+}
+const reqPicker = makePicker("rPicker");
+const expPicker = makePicker("ePicker");
 
 /* ---- AI: извлечение компетенций по таксономии (как app/ai.py) ---- */
 const TAXONOMY = {python:["python","питон"],fastapi:["fastapi","фастапи"],django:["django","джанго"],react:["react","реакт"],typescript:["typescript","тайпскрипт"],sql:["sql","postgres","база данных","бд","запрос"],ml:["ml","machine learning","машинн","модел","обучени"],data:["data engineer","данны","аналитик","etl","пайплайн"],nlp:["nlp","llm","чат-бот","чатбот","распознавани","текст","язык"],devops:["devops","ci/cd","деплой","kubernetes","k8s"],docker:["docker","докер","контейнер"],flutter:["flutter","флаттер"],ui:["ui","ux","интерфейс","вёрстк","верстк","frontend","фронт"]};
@@ -290,18 +319,16 @@ function expList(){ setCounts(); $("#expList").innerHTML=state.experts.map(e=>`<
 document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click",()=>{ document.querySelectorAll("nav.tabs button").forEach(x=>x.classList.toggle("on",x===b)); ["assign","requests","experts"].forEach(t=>$("#view-"+t).classList.toggle("hidden",t!==b.dataset.tab)); ({assign:dashboard,requests:reqList,experts:expList}[b.dataset.tab])(); }));
 
 /* ---- формы ---- */
-let aiSkills={};
-$("#parseBtn").addEventListener("click",()=>{ const t=$("#rText").value.trim(); if(!t){notify("Сначала опиши задачу словами");return;} aiSkills=extractSkills(t);
-  $("#rChips").innerHTML=Object.entries(aiSkills).map(([k,v])=>`<span class="chip">${esc(k)} ${v}</span>`).join("")||'<span class="method">навыки не распознаны — впиши вручную</span>';
-  $("#rMethod").textContent="🔑 по ключевым словам (демо без сервера)"; });
-$("#reqForm").addEventListener("submit",e=>{ e.preventDefault(); const m=parseSkills($("#rSkills").value); const sk=Object.keys(m).length?m:aiSkills;
-  if(!Object.keys(sk).length){ notify("Добавь хотя бы одну компетенцию — через AI или вручную"); return; }
+$("#parseBtn").addEventListener("click",()=>{ const t=$("#rText").value.trim(); if(!t){notify("Сначала опиши задачу словами");return;} const sk=extractSkills(t); reqPicker.set(sk);
+  $("#rMethod").textContent = Object.keys(sk).length ? "🔑 распознано по ключевым словам — поправь кнопками" : "навыки не распознаны — выбери кнопками ниже"; });
+$("#reqForm").addEventListener("submit",e=>{ e.preventDefault(); const sk=reqPicker.get();
+  if(!Object.keys(sk).length){ notify("Выбери хотя бы одну компетенцию — кнопки ниже"); return; }
   state.requests.push({id:uid("r"),title:$("#rTitle").value.trim(),required_skills:sk,priority:+$("#rPriority").value}); save();
-  e.target.reset(); aiSkills={}; $("#rChips").innerHTML=""; $("#rMethod").textContent=""; notify("Заявка добавлена",true); reqList(); });
-$("#expForm").addEventListener("submit",e=>{ e.preventDefault(); const sk=parseSkills($("#eSkills").value);
-  if(!Object.keys(sk).length){ notify("Укажи навыки в формате python:5, fastapi:4"); return; }
+  e.target.reset(); reqPicker.clear(); $("#rMethod").textContent=""; notify("Заявка добавлена",true); reqList(); });
+$("#expForm").addEventListener("submit",e=>{ e.preventDefault(); const sk=expPicker.get();
+  if(!Object.keys(sk).length){ notify("Выбери навыки исполнителя — кнопки ниже"); return; }
   state.experts.push({id:uid("e"),name:$("#eName").value.trim(),role:$("#eRole").value,skills:sk,capacity:+$("#eCap").value,current_load:0,available:true,rating:+$("#eRating").value}); save();
-  e.target.reset(); notify("Исполнитель добавлен",true); expList(); });
+  e.target.reset(); expPicker.clear(); notify("Исполнитель добавлен",true); expList(); });
 $("#seedBtn").addEventListener("click",()=>{ seedData(); const on=document.querySelector("nav.tabs button.on").dataset.tab; ({assign:dashboard,requests:reqList,experts:expList}[on])(); notify("Демо-данные загружены",true); });
 
 /* ---- демо-баннер ---- */
