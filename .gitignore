@@ -4,3 +4,7 @@ __pycache__/
 .pytest_cache/
 .claude/
 *.db
+
+# локальная БД (создаётся при запуске)
+alem.db
+alem.db-*
