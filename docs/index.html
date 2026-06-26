@@ -118,16 +118,29 @@
   #toast.toast.show { opacity: 1; transform: translate(-50%, 0); }
   #toast.toast.err { background: var(--danger); }
   #toast.toast.ok { background: var(--ok); }
+  .brand .tag { font-size: .72rem; color: var(--muted); font-weight: 500; margin-top: 1px; }
+  nav.tabs .cnt { display: inline-grid; place-items: center; min-width: 1.2rem; height: 1.2rem;
+    padding: 0 .35rem; margin-left: .25rem; border-radius: 99px; font-size: .72rem;
+    background: var(--soft); color: var(--accent-d); }
+  nav.tabs button.on .cnt { background: oklch(100% 0 0 / .25); color: #fff; }
+  .guide { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 1rem 1.2rem; margin-bottom: 1.4rem; }
+  .guide .hd { font-weight: 700; font-size: .95rem; margin-bottom: .55rem; }
+  .guide .steps { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .guide .step { flex: 1; min-width: 210px; font-size: .88rem; color: var(--muted); }
+  .guide .step b { color: var(--accent-d); margin-right: .15rem; }
+  .guide a { color: var(--accent); font-weight: 600; cursor: pointer; text-decoration: none; }
+  .guide a:hover { text-decoration: underline; }
   .hidden { display: none !important; }
 </style>
 </head>
 <body>
   <header class="top">
-    <div class="brand"><div class="logo">A</div><b>Alem Expert Router</b></div>
+    <div class="brand"><div class="logo">A</div><div><b>Alem Expert Router</b><div class="tag">Автоматическое распределение заявок по исполнителям</div></div></div>
     <nav class="tabs">
       <button data-tab="assign" class="on">Распределение</button>
-      <button data-tab="requests">Заявки</button>
-      <button data-tab="experts">Эксперты</button>
+      <button data-tab="requests">Заявки <span class="cnt" id="cntReq"></span></button>
+      <button data-tab="experts">Эксперты <span class="cnt" id="cntExp"></span></button>
     </nav>
     <div class="spacer"></div>
     <button class="btn sm" id="seedBtn">Демо-данные</button>
@@ -135,7 +148,9 @@
 
   <main>
     <!-- ===== РАСПРЕДЕЛЕНИЕ ===== -->
-    <section id="view-assign" class="grid">
+    <section id="view-assign">
+      <div id="guide" class="guide"></div>
+      <div class="grid">
       <aside style="display:grid; gap:1.4rem;">
         <section class="card"><h2>Сводка</h2>
           <div class="stats">
@@ -150,6 +165,7 @@
       </aside>
       <section class="card"><h2>Назначения с объяснением</h2>
         <div class="assign" id="assignments"></div></section>
+      </div>
     </section>
 
     <!-- ===== ЗАЯВКИ ===== -->
@@ -254,16 +270,20 @@ function assignAll(){ const pool=clone(state.experts); const ord=clone(state.req
   return {assignments:A,unassigned:U,matched:A.length,total:state.requests.length}; }
 
 /* ---- рендер ---- */
-function dashboard(){ const r=assignAll(); const ld={}; state.experts.forEach(e=>ld[e.id]=0); r.assignments.forEach(a=>ld[a.expert_id]++);
+function setCounts(){ $("#cntReq").textContent=state.requests.length; $("#cntExp").textContent=state.experts.length; }
+function buildGuide(){ const g=$("#guide"); if(!g||g.dataset.built) return; g.dataset.built="1";
+  g.innerHTML=`<div class="hd">Как это работает</div><div class="steps"><div class="step"><b>1.</b> Добавь <a data-go="requests">заявки</a> — что нужно сделать (с навыками)</div><div class="step"><b>2.</b> Добавь <a data-go="experts">экспертов</a> — кто может это сделать</div><div class="step"><b>3.</b> Система сама назначает лучшего — результат ниже ↓</div></div>`;
+  g.querySelectorAll("[data-go]").forEach(a=>a.onclick=()=>document.querySelector(`nav.tabs button[data-tab="${a.dataset.go}"]`).click()); }
+function dashboard(){ buildGuide(); setCounts(); const r=assignAll(); const ld={}; state.experts.forEach(e=>ld[e.id]=0); r.assignments.forEach(a=>ld[a.expert_id]++);
   $("#matched").textContent=r.matched; $("#total").textContent=r.total; $("#rate").textContent=r.total?Math.round(r.matched/r.total*100)+"%":"—";
   $("#mentors").innerHTML=state.experts.map(e=>`<div class="mentor"><div class="row"><span>${esc(e.name)} <span class="role">· ${esc(e.role)}</span></span><span>${ld[e.id]}/${e.capacity}</span></div><div class="bar"><i data-w="${Math.min(ld[e.id]/e.capacity,1)}"></i></div></div>`).join("")||'<p class="empty">Нет исполнителей.</p>';
   requestAnimationFrame(()=>document.querySelectorAll(".bar > i").forEach(i=>i.style.transform=`scaleX(${i.dataset.w})`));
   $("#assignments").innerHTML=r.assignments.map(a=>`<article class="item"><div class="score">${Math.round(a.score)}</div><div><h3>${esc(a.request_title)} ${a.reasons.some(x=>x.includes("приоритет"))?'<span class="pill hi">приоритет</span>':""}</h3><div class="who">→ <b>${esc(a.expert_name)}</b></div><ul class="reasons">${a.reasons.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div></article>`).join("")||'<p class="empty">Заявок нет — добавь во вкладке «Заявки».</p>';
   $("#unassignedCard").classList.toggle("hidden",r.unassigned.length===0);
   $("#unassigned").innerHTML=r.unassigned.map(x=>`<div class="u"><span class="x">✗</span><span>${esc(x.request_title)} — <em>${esc(x.reason)}</em></span></div>`).join(""); }
-function reqList(){ $("#reqList").innerHTML=clone(state.requests).sort((a,b)=>b.priority-a.priority).map(r=>`<div class="row-card"><div class="av">P${r.priority}</div><div class="meta"><b>${esc(r.title)}</b><div class="sub">${esc(skillStr(r.required_skills))||"без навыков"}</div></div><button class="del" data-dr="${esc(r.id)}" title="Удалить">✕</button></div>`).join("")||'<p class="empty">Заявок нет.</p>';
+function reqList(){ setCounts(); $("#reqList").innerHTML=clone(state.requests).sort((a,b)=>b.priority-a.priority).map(r=>`<div class="row-card"><div class="av">P${r.priority}</div><div class="meta"><b>${esc(r.title)}</b><div class="sub">${esc(skillStr(r.required_skills))||"без навыков"}</div></div><button class="del" data-dr="${esc(r.id)}" title="Удалить">✕</button></div>`).join("")||'<p class="empty">Заявок нет.</p>';
   document.querySelectorAll("[data-dr]").forEach(b=>b.onclick=()=>{ state.requests=state.requests.filter(x=>x.id!==b.dataset.dr); save(); reqList(); }); }
-function expList(){ $("#expList").innerHTML=state.experts.map(e=>`<div class="row-card"><div class="av">${esc(e.name.slice(0,1))}</div><div class="meta"><b>${esc(e.name)}</b> <span style="font-size:.78rem;color:var(--muted)">· ${esc(e.role)} · ★${e.rating}</span><div class="sub">${esc(skillStr(e.skills))} · ёмкость ${e.capacity}</div></div><button class="del" data-de="${esc(e.id)}" title="Удалить">✕</button></div>`).join("")||'<p class="empty">Нет исполнителей.</p>';
+function expList(){ setCounts(); $("#expList").innerHTML=state.experts.map(e=>`<div class="row-card"><div class="av">${esc(e.name.slice(0,1))}</div><div class="meta"><b>${esc(e.name)}</b> <span style="font-size:.78rem;color:var(--muted)">· ${esc(e.role)} · ★${e.rating}</span><div class="sub">${esc(skillStr(e.skills))} · ёмкость ${e.capacity}</div></div><button class="del" data-de="${esc(e.id)}" title="Удалить">✕</button></div>`).join("")||'<p class="empty">Нет исполнителей.</p>';
   document.querySelectorAll("[data-de]").forEach(b=>b.onclick=()=>{ state.experts=state.experts.filter(x=>x.id!==b.dataset.de); save(); expList(); }); }
 
 /* ---- вкладки ---- */

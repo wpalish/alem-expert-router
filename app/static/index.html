@@ -118,16 +118,29 @@
   #toast.toast.show { opacity: 1; transform: translate(-50%, 0); }
   #toast.toast.err { background: var(--danger); }
   #toast.toast.ok { background: var(--ok); }
+  .brand .tag { font-size: .72rem; color: var(--muted); font-weight: 500; margin-top: 1px; }
+  nav.tabs .cnt { display: inline-grid; place-items: center; min-width: 1.2rem; height: 1.2rem;
+    padding: 0 .35rem; margin-left: .25rem; border-radius: 99px; font-size: .72rem;
+    background: var(--soft); color: var(--accent-d); }
+  nav.tabs button.on .cnt { background: oklch(100% 0 0 / .25); color: #fff; }
+  .guide { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 1rem 1.2rem; margin-bottom: 1.4rem; }
+  .guide .hd { font-weight: 700; font-size: .95rem; margin-bottom: .55rem; }
+  .guide .steps { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .guide .step { flex: 1; min-width: 210px; font-size: .88rem; color: var(--muted); }
+  .guide .step b { color: var(--accent-d); margin-right: .15rem; }
+  .guide a { color: var(--accent); font-weight: 600; cursor: pointer; text-decoration: none; }
+  .guide a:hover { text-decoration: underline; }
   .hidden { display: none !important; }
 </style>
 </head>
 <body>
   <header class="top">
-    <div class="brand"><div class="logo">A</div><b>Alem Expert Router</b></div>
+    <div class="brand"><div class="logo">A</div><div><b>Alem Expert Router</b><div class="tag">Автоматическое распределение заявок по исполнителям</div></div></div>
     <nav class="tabs">
       <button data-tab="assign" class="on">Распределение</button>
-      <button data-tab="requests">Заявки</button>
-      <button data-tab="experts">Эксперты</button>
+      <button data-tab="requests">Заявки <span class="cnt" id="cntReq"></span></button>
+      <button data-tab="experts">Эксперты <span class="cnt" id="cntExp"></span></button>
     </nav>
     <div class="spacer"></div>
     <button class="btn sm" id="seedBtn">Демо-данные</button>
@@ -135,7 +148,9 @@
 
   <main>
     <!-- ===== РАСПРЕДЕЛЕНИЕ ===== -->
-    <section id="view-assign" class="grid">
+    <section id="view-assign">
+      <div id="guide" class="guide"></div>
+      <div class="grid">
       <aside style="display:grid; gap:1.4rem;">
         <section class="card"><h2>Сводка</h2>
           <div class="stats">
@@ -150,6 +165,7 @@
       </aside>
       <section class="card"><h2>Назначения с объяснением</h2>
         <div class="assign" id="assignments"></div></section>
+      </div>
     </section>
 
     <!-- ===== ЗАЯВКИ ===== -->
@@ -241,8 +257,19 @@ document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("cl
 }));
 
 /* ---- распределение ---- */
+function buildGuide() {
+  const g = $("#guide"); if (!g || g.dataset.built) return; g.dataset.built = "1";
+  g.innerHTML = `<div class="hd">Как это работает</div><div class="steps">
+    <div class="step"><b>1.</b> Добавь <a data-go="requests">заявки</a> — что нужно сделать (с навыками)</div>
+    <div class="step"><b>2.</b> Добавь <a data-go="experts">экспертов</a> — кто может это сделать</div>
+    <div class="step"><b>3.</b> Система сама назначает лучшего — результат ниже ↓</div></div>`;
+  g.querySelectorAll("[data-go]").forEach(a => a.onclick = () =>
+    document.querySelector(`nav.tabs button[data-tab="${a.dataset.go}"]`).click());
+}
 async function loadDashboard() {
   const d = await api.get("/dashboard");
+  buildGuide();
+  $("#cntReq").textContent = d.total; $("#cntExp").textContent = d.experts.length;
   $("#matched").textContent = d.matched; $("#total").textContent = d.total;
   $("#rate").textContent = d.total ? Math.round(d.matched/d.total*100)+"%" : "—";
   $("#mentors").innerHTML = d.experts.map(e => `
@@ -266,6 +293,7 @@ async function loadDashboard() {
 let aiSkills = {};
 async function loadRequests() {
   const rs = await api.get("/requests");
+  $("#cntReq").textContent = rs.length;
   $("#reqList").innerHTML = rs.map(r => `
     <div class="row-card"><div class="av">P${r.priority}</div>
       <div class="meta"><b>${esc(r.title)}</b><div class="sub">${esc(skillStr(r.required_skills)) || "без навыков"}</div></div>
@@ -311,6 +339,7 @@ $("#reqForm").addEventListener("submit", async (e) => {
 /* ---- эксперты ---- */
 async function loadExperts() {
   const es = await api.get("/experts");
+  $("#cntExp").textContent = es.length;
   $("#expList").innerHTML = es.map(e => `
     <div class="row-card"><div class="av">${esc(e.name.slice(0,1))}</div>
       <div class="meta"><b>${esc(e.name)}</b> <span class="role" style="font-size:.78rem;color:var(--muted)">· ${esc(e.role)} · ★${e.rating}</span>
