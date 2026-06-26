@@ -129,9 +129,12 @@ def remove_request(request_id: str) -> dict[str, bool]:
 
 
 @app.post("/requests/parse", response_model=ParseResult, tags=["Requests"])
-def parse_request(payload: ParseInput) -> ParseResult:
-    """AI: извлечь требуемые компетенции из свободного текста заявки."""
-    skills, method = ai.extract_skills(payload.text)
+async def parse_request(payload: ParseInput) -> ParseResult:
+    """AI: извлечь требуемые компетенции из свободного текста заявки.
+
+    Пробует LLM (если задан GROQ_API_KEY), иначе детерминированный fallback.
+    """
+    skills, method = await ai.extract_skills_async(payload.text)
     return ParseResult(skills=skills, method=method)
 
 

@@ -25,20 +25,32 @@ class Database:
     def _conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._path)
         conn.row_factory = sqlite3.Row
+        # --- П.7 FIX: WAL для конкурентного чтения, foreign keys ---
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
         return conn
 
     def _init(self) -> None:
         with self._lock, self._conn() as c:
             c.execute(
                 """CREATE TABLE IF NOT EXISTS experts (
-                    id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT,
-                    skills TEXT, capacity INTEGER, current_load INTEGER,
-                    available INTEGER, rating REAL)"""
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    role TEXT,
+                    skills TEXT,
+                    capacity INTEGER,
+                    current_load INTEGER,
+                    available INTEGER,
+                    rating REAL)"""
             )
             c.execute(
                 """CREATE TABLE IF NOT EXISTS requests (
-                    id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT,
-                    required_skills TEXT, priority INTEGER, deadline TEXT,
+                    id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    description TEXT,
+                    required_skills TEXT,
+                    priority INTEGER,
+                    deadline TEXT,
                     status TEXT)"""
             )
 
@@ -64,14 +76,30 @@ class Database:
     # ----- эксперты -----
     def upsert_expert(self, e: Expert) -> Expert:
         with self._lock, self._conn() as c:
+            # --- П.6 FIX: явные колонки в INSERT ---
             c.execute(
-                """INSERT INTO experts VALUES (:id,:name,:role,:skills,:capacity,
-                       :current_load,:available,:rating)
-                   ON CONFLICT(id) DO UPDATE SET name=:name, role=:role,
-                       skills=:skills, capacity=:capacity, current_load=:current_load,
-                       available=:available, rating=:rating""",
-                {**e.model_dump(), "skills": json.dumps(e.skills),
-                 "available": int(e.available)},
+                """INSERT INTO experts (id, name, role, skills, capacity,
+                       current_load, available, rating)
+                   VALUES (:id, :name, :role, :skills, :capacity,
+                       :current_load, :available, :rating)
+                   ON CONFLICT(id) DO UPDATE SET
+                       name=excluded.name,
+                       role=excluded.role,
+                       skills=excluded.skills,
+                       capacity=excluded.capacity,
+                       current_load=excluded.current_load,
+                       available=excluded.available,
+                       rating=excluded.rating""",
+                {
+                    "id": e.id,
+                    "name": e.name,
+                    "role": e.role,
+                    "skills": json.dumps(e.skills),
+                    "capacity": e.capacity,
+                    "current_load": e.current_load,
+                    "available": int(e.available),
+                    "rating": e.rating,
+                },
             )
         return e
 
@@ -82,19 +110,35 @@ class Database:
 
     def delete_expert(self, expert_id: str) -> bool:
         with self._lock, self._conn() as c:
-            return c.execute("DELETE FROM experts WHERE id=?", (expert_id,)).rowcount > 0
+            return c.execute(
+                "DELETE FROM experts WHERE id=?", (expert_id,)
+            ).rowcount > 0
 
     # ----- заявки -----
     def upsert_request(self, r: Request) -> Request:
         with self._lock, self._conn() as c:
+            # --- П.6 FIX: явные колонки в INSERT ---
             c.execute(
-                """INSERT INTO requests VALUES (:id,:title,:description,
-                       :required_skills,:priority,:deadline,:status)
-                   ON CONFLICT(id) DO UPDATE SET title=:title, description=:description,
-                       required_skills=:required_skills, priority=:priority,
-                       deadline=:deadline, status=:status""",
-                {**r.model_dump(), "required_skills": json.dumps(r.required_skills),
-                 "deadline": r.deadline.isoformat() if r.deadline else None},
+                """INSERT INTO requests (id, title, description,
+                       required_skills, priority, deadline, status)
+                   VALUES (:id, :title, :description,
+                       :required_skills, :priority, :deadline, :status)
+                   ON CONFLICT(id) DO UPDATE SET
+                       title=excluded.title,
+                       description=excluded.description,
+                       required_skills=excluded.required_skills,
+                       priority=excluded.priority,
+                       deadline=excluded.deadline,
+                       status=excluded.status""",
+                {
+                    "id": r.id,
+                    "title": r.title,
+                    "description": r.description,
+                    "required_skills": json.dumps(r.required_skills),
+                    "priority": r.priority,
+                    "deadline": r.deadline.isoformat() if r.deadline else None,
+                    "status": r.status,
+                },
             )
         return r
 
@@ -105,7 +149,9 @@ class Database:
 
     def delete_request(self, request_id: str) -> bool:
         with self._lock, self._conn() as c:
-            return c.execute("DELETE FROM requests WHERE id=?", (request_id,)).rowcount > 0
+            return c.execute(
+                "DELETE FROM requests WHERE id=?", (request_id,)
+            ).rowcount > 0
 
     # ----- обслуживание -----
     def reset(self) -> None:
